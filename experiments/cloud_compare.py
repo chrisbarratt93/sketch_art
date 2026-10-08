@@ -48,6 +48,8 @@ def main():
     ap.add_argument("--prompt", default="urban_rich")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--lines", default=None, help="klein ink drawing to paint over (uses OVER_LINES)")
+    ap.add_argument("--ink-opacity", type=float, default=0.3,
+                    help="with --lines: strength of klein's ink laid back over the paint (1 = full black)")
     ap.add_argument("-o", "--out", default="out/cloud")
     args = ap.parse_args()
     out = Path(args.out)
@@ -91,7 +93,8 @@ def main():
             paint = cv2.imread(f"{name}.png")
             ink = cv2.resize(cv2.imread(args.lines, cv2.IMREAD_GRAYSCALE), paint.shape[1::-1],
                              interpolation=cv2.INTER_CUBIC)
-            cv2.imwrite(f"{name}_inked.png", (paint * (ink[..., None] / 255.0)).astype("uint8"))
+            ink = 1 - args.ink_opacity * (1 - ink[..., None] / 255.0)
+            cv2.imwrite(f"{name}_inked.png", (paint * ink).clip(0, 255).astype("uint8"))
         print(json.dumps({"painting": f"{name}.png", "seconds": round(time.time() - t0, 1)}))
         return
     bw = klein.black_and_white(cv2.imread(str(raw)))
