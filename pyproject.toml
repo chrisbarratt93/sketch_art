@@ -16,6 +16,18 @@ dependencies = [
 # Learned edge detection (TEED). On Linux, PyPI's torch wheel bundles CUDA;
 # see README for a CPU-only index if you want a smaller install.
 learned = ["torch>=2.4"]
+# Hugging Face models (see MODELS.md): extra edge detectors via controlnet-aux,
+# segmentation and depth via transformers. Weights download on first use.
+hub = [
+    "torch>=2.4",
+    "torchvision",
+    "controlnet-aux>=0.0.10",
+    "transformers>=4.45",
+    "huggingface-hub",
+]
 
 [tool.uv]
 package = false
+# controlnet-aux pulls in opencv-python-headless, which would overwrite the
+# cv2 package from opencv-contrib-python-headless (we need cv2.ximgproc).
+override-dependencies = ["opencv-python-headless; sys_platform == 'never'"]

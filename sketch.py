@@ -16,9 +16,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from sketchart import hub
 from sketchart.edges import EdgeParams, extract
 from sketchart.output import render, write_svg
 from sketchart.ink import InkParams, ink
+from sketchart.segment import GROUPS, preview as seg_preview
 from sketchart.stylise import PRESETS, preset, stylise
 from sketchart.tone import ToneParams, tone
 from sketchart.trace import order, trace, travel_stats
@@ -35,6 +37,17 @@ def main():
                     help="ink (default): trace the learned TEED edge map faithfully (needs `uv sync --extra learned`)")
     ap.add_argument("--max-side", type=int, default=1400,
                     help="downscale so the longest side is at most this (0 = full photo resolution)")
+    hf = ap.add_argument_group("Hugging Face models (ink style; needs `uv sync --extra hub`, see MODELS.md)")
+    hf.add_argument("--edge-model", choices=hub.NAMES, default="teed", help="edge map to trace (default: teed)")
+    hf.add_argument("--model-scale", type=float, default=None,
+                    help="run the edge model at this multiple of the photo size (default: per model)")
+    hf.add_argument("--hi", type=float, default=None, help="strong-line threshold on the edge map, 0..1")
+    hf.add_argument("--lo", type=float, default=None, help="weak-line threshold on the edge map, 0..1")
+    hf.add_argument("--remove", default="",
+                    help="comma list of scene layers to leave blank: " + ",".join(GROUPS))
+    hf.add_argument("--seg-model", choices=("tiny", "large"), default="tiny", help="OneFormer size for --remove")
+    hf.add_argument("--depth-fade", type=float, default=0.0,
+                    help="0..1: lighten line weight with distance (Depth Anything V2)")
     ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stages 2-3)")
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
@@ -43,7 +56,12 @@ def main():
     prefix.parent.mkdir(parents=True, exist_ok=True)
 
     if args.style == "ink":
-        s = ink(args.image, InkParams(max_side=args.max_side))
+        remove = tuple(r for r in args.remove.split(",") if r)
+        if bad := set(remove) - set(GROUPS):
+            ap.error(f"--remove: unknown layer(s) {', '.join(sorted(bad))}")
+        s = ink(args.image, InkParams(max_side=args.max_side, edge_model=args.edge_model,
+                                      model_scale=args.model_scale, hi=args.hi, lo=args.lo,
+                                      remove=remove, seg_model=args.seg_model, depth_fade=args.depth_fade))
         h, w = s["gray"].shape
         layers = [("heavy", 1.5, order(s["heavy"])),
                   ("medium", 1.0, order(s["medium"])),
@@ -55,7 +73,11 @@ def main():
         cv2.imwrite(f"{prefix}_preview.png", render((w, h), layers))
         if args.debug:
             prob = cv2.resize(s["prob"], (w, h), interpolation=cv2.INTER_AREA)
-            cv2.imwrite(f"{prefix}_teed.png", (255 * (1 - prob)).astype(np.uint8))
+            cv2.imwrite(f"{prefix}_{args.edge_model}.png", (255 * (1 - prob)).astype(np.uint8))
+            if s["layers"] is not None:
+                cv2.imwrite(f"{prefix}_layers.png", seg_preview(s["color"], s["layers"]))
+            if s["near"] is not None:
+                cv2.imwrite(f"{prefix}_depth.png", (255 * s["near"]).astype(np.uint8))
         print(json.dumps({"size": [w, h], **travel_stats([p for _, _, p in layers])}))
         return
 

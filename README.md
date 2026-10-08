@@ -7,6 +7,7 @@ Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 ```
 uv sync                    # core install
 uv sync --extra learned    # + PyTorch for the learned edge detector (needed by the default ink style)
+uv sync --extra hub        # + Hugging Face models: other edge detectors, segmentation, depth (MODELS.md)
 ```
 
 On Linux, PyPI's PyTorch wheel bundles CUDA (several GB). For a CPU-only install, add this to
@@ -114,6 +115,13 @@ For print-quality output use the full photo: `--max-side 0`. The classic pipelin
      along the perspective lines of a wall. Pen-up travel is high (~0.6× pen-down), which a
      boustrophedon order within each patch would fix.
 4. **Plot**: page sizing in mm, pen-width-aware hatch spacing, layer per pen, vpype/AxiDraw export.
+
+## Hugging Face models
+
+[MODELS.md](MODELS.md) covers the optional Hub models: alternative edge maps for ink mode
+(`--edge-model lineart|anyline|hed|…`), clutter removal by segmentation (`--remove people,vehicles`),
+depth-based line weight (`--depth-fade`), and `compare_models.py`, which lays every model's result
+side by side for one photo.
 
 ## Ideas
 
