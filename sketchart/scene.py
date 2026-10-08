@@ -40,8 +40,10 @@ ADE_LAYERS = {
 # Labels Grounding DINO also gives to parts of buildings (columns, lettering);
 # these must not be mostly building in the segmentation to count as clutter.
 LOOKALIKES = {"street lamp", "sign"}
-CLUTTER = ["crane", "person", "car", "van", "bicycle", "street lamp", "sign", "umbrella",
-           "table", "chair", "scaffolding", "traffic cone", "bin"]
+# "road sign" and "traffic sign" are not LOOKALIKES, so a sign on a pole is removed even when the
+# segmentation paints it as part of the building behind (the mill pond's no-cycling sign).
+CLUTTER = ["crane", "person", "dog", "car", "van", "bicycle", "street lamp", "sign", "road sign",
+           "traffic sign", "umbrella", "table", "chair", "scaffolding", "traffic cone", "bin"]
 
 
 def _release(*models):

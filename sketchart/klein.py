@@ -96,6 +96,13 @@ PROMPTS = {
         "and foliage, darkest accents in the shadows. Lit areas and sky left as white paper, the "
         "sketch fading out towards the edges of the picture. Graphite only, no colour."),
 }
+# Appended to every prompt, built-in or custom: image models like to invent lettering
+# (a "25" on a no-cycling sign, writing on a wall) and stray marks.
+FAITHFUL = (
+    "Do not add any text, letters, numbers or symbols: any sign, plaque or lettering that is in the "
+    "photo is reproduced exactly as it is or left blank. Do not add any object, figure, mark, blot or "
+    "splash that is not in the photo, and do not leave out any building, tree, hill or water.")
+
 # Styles that are paintings, not pen drawings: kept in colour/tone and not traced for the plotter.
 PAINTED = {"watercolour_ink", "watercolour_ink_detailed", "pen_and_wash", "pencil"}
 
@@ -162,7 +169,7 @@ def _graph(image, prompt, seed, p):
 
 def draw(photo_path, seed, dst, p=KleinParams()):
     """Redraw the photo at `photo_path` as ink; writes the raw model output to `dst`."""
-    prompt = PROMPTS.get(p.prompt, p.prompt)
+    prompt = PROMPTS.get(p.prompt, p.prompt) + " " + FAITHFUL
     pid = _call("/prompt", {"prompt": _graph(_upload(photo_path), prompt, seed, p),
                             "client_id": str(uuid.uuid4())})["prompt_id"]
     while True:
