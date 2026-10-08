@@ -86,8 +86,13 @@ def _detect(proc, model, img, prompts, box_thr, text_thr):
         model(**inputs), inputs.input_ids, threshold=box_thr, text_threshold=text_thr,
         target_sizes=[img.size[::-1]])[0]
     boxes = r["boxes"].cpu().numpy()
-    # With no detections the label list still holds one empty string.
-    return boxes, list(r["text_labels"])[:len(boxes)]
+    # With no detections the label list still holds one empty string. Labels can come back as part
+    # of a prompt ("sign" for "road sign"); map them back to the full prompt they came from.
+    labels = []
+    for label in list(r["text_labels"])[:len(boxes)]:
+        full = [q for q in prompts if label and label in q]
+        labels.append(label if label in prompts or not full else full[0])
+    return boxes, labels
 
 
 @torch.inference_mode()
@@ -113,8 +118,7 @@ def clutter_mask(bgr, prompts=CLUTTER, layers=None, box_thr=0.25, text_thr=0.25,
         labels += l
     _release(dino)
     boxes = np.concatenate(boxes).reshape(-1, 4)
-    # A box over half the photo is the model labelling the whole scene, not an
-    # object. Labels can come back truncated ("street" for "street lamp"); those are guesses.
+    # A box over half the photo is the model labelling the whole scene, not an object.
     keep = ((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) < 0.5 * w * h) & \
         np.isin(labels, prompts)
     boxes, labels = boxes[keep], [l for l, k in zip(labels, keep) if k]
