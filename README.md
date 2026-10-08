@@ -7,6 +7,22 @@ Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 ```
 uv sync                    # core install
 uv sync --extra learned    # + PyTorch for the learned edge detector (experimental, not wired in yet)
+```
+
+On Linux, PyPI's PyTorch wheel bundles CUDA (several GB). For a CPU-only install, add this to
+`pyproject.toml` before `uv sync --extra learned`:
+
+```toml
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+```
+
+```
 uv run sketch.py examples/market_hall.jpg                       # line geometry only (current default)
 uv run sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
 uv run sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
