@@ -49,7 +49,7 @@ def main():
     ap.add_argument("--count", type=int, default=3,
                     help="klein: drawings to make, one per seed from --seed (results vary; pick the best)")
     ap.add_argument("--prompt", default="urban_rich",
-                    help="klein: pen styles urban_rich (default), urban, plotter, engraving; painted styles "
+                    help="klein: pen styles urban_rich (default), architect, urban, plotter, engraving; painted styles "
                          "(colour PNG only, no plotter SVG) watercolour_ink, pen_and_wash, pencil; or your own text")
     ap.add_argument("--mp", type=float, default=4.0,
                     help="klein: drawing size in megapixels (4 = about 2400 x 1600, ~50 s each)")

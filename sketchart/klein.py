@@ -46,6 +46,20 @@ PROMPTS = {
         "on stone walls, short flicked strokes for grass, scalloped clusters for leaves. Shadows with "
         "parallel hatching. Leave white paper in the sky and lit areas. Black ink only: no pencil, no "
         "grey tones, no wash, no colour, no solid black fills."),
+    # Architect's freehand perspective sketch: deliberate, near-ruled lines and economical texture.
+    "architect": (
+        "Redraw this photo as an architect's technical perspective sketch in black ink fineliner on "
+        "pure white paper, drawn by a skilled architect. Keep the exact composition, framing and "
+        "perspective of the photo, and draw only what is in it: add nothing. Every line is drawn "
+        "once, decisively, in a single confident stroke: straight edges are crisp and nearly ruled, "
+        "converging accurately to their vanishing points, and lines run slightly past the corners "
+        "where they meet, as architects do. No sketchy, broken, hairy or repeated lines. Clear line "
+        "hierarchy: a heavier line for silhouettes and major edges, a medium line for windows, doors "
+        "and openings, a fine line for detail and texture. Materials are indicated economically with "
+        "even, regular marks: tile rows on roofs, coursing on stone walls, glazing bars in windows, "
+        "simple scalloped outlines for trees and shrubs. Shadows with neat, evenly spaced parallel "
+        "hatching. Generous white paper in the sky, the lit walls and the ground. Black ink only: no "
+        "grey tones, no wash, no colour, no solid black fills."),
     "urban": (
         "Turn this photo into a loose urban sketch in black fineliner on white paper, as a skilled urban "
         "sketcher would draw it on location. Confident, slightly wobbly hand-drawn lines, detail "

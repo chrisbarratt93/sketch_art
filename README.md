@@ -43,7 +43,7 @@ its own marks.
 1. The photo is decluttered (see below) and becomes klein's reference image.
 2. klein redraws it from the `urban_rich` prompt: a pen-and-ink urban sketch with medium detail,
    keeping each material's texture (awning stripes, tiles, stonework, grass) and the exact
-   composition. Other pen prompts: `--prompt urban | plotter | engraving`, or your own text.
+   composition. Other pen prompts: `--prompt architect | urban | plotter | engraving` (`architect`: an architect's technical perspective sketch with decisive, near-ruled lines, crossed corners and a clear line-weight hierarchy), or your own text.
    Painted styles for prints (kept in colour, no plotter SVG): `--prompt watercolour_ink |
    pen_and_wash | pencil`.
 3. The drawing is forced to pure black ink on white paper, because klein sometimes lets colour or
