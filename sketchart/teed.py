@@ -122,6 +122,7 @@ class TED(nn.Module):
 
 
 _model = None
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load():
@@ -133,7 +134,7 @@ def load():
             urllib.request.urlretrieve(WEIGHTS_URL, path)
         _model = TED()
         _model.load_state_dict(torch.load(path, map_location="cpu", weights_only=True))
-        _model.eval()
+        _model.eval().to(DEVICE)
     return _model
 
 
@@ -144,7 +145,7 @@ def edge_probability(bgr, scale=1.0):
     H = int(round(h * scale / 16)) * 16
     W = int(round(w * scale / 16)) * 16
     img = cv2.resize(bgr, (W, H), interpolation=cv2.INTER_CUBIC).astype(np.float32) - BIPED_MEAN_BGR
-    x = torch.from_numpy(np.ascontiguousarray(img.transpose(2, 0, 1)[None]))
+    x = torch.from_numpy(np.ascontiguousarray(img.transpose(2, 0, 1)[None])).to(DEVICE)
     with torch.no_grad():
-        prob = torch.sigmoid(load()(x))[0, 0].numpy()
+        prob = torch.sigmoid(load()(x))[0, 0].cpu().numpy()
     return cv2.resize(prob, (w, h), interpolation=cv2.INTER_LINEAR)

@@ -51,7 +51,7 @@ def load_gray(path, max_side):
     if img is None:
         raise FileNotFoundError(path)
     h, w = img.shape[:2]
-    scale = max_side / max(h, w)
+    scale = max_side / max(h, w) if max_side else 1.0
     if scale < 1:
         img = cv2.resize(img, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA)
     # Lab lightness tracks perceived brightness better than a plain RGB average.

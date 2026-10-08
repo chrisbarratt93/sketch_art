@@ -18,7 +18,7 @@ import numpy as np
 
 from sketchart.edges import EdgeParams, extract
 from sketchart.output import render, write_svg
-from sketchart.ink import ink
+from sketchart.ink import InkParams, ink
 from sketchart.stylise import PRESETS, preset, stylise
 from sketchart.tone import ToneParams, tone
 from sketchart.trace import order, trace, travel_stats
@@ -33,6 +33,8 @@ def main():
                     help="edge source: classic (Canny + ridges) or learned TEED (needs `uv sync --extra learned`)")
     ap.add_argument("--style", choices=["ink"] + sorted(PRESETS), default="ink",
                     help="ink (default): trace the learned TEED edge map faithfully (needs `uv sync --extra learned`)")
+    ap.add_argument("--max-side", type=int, default=1400,
+                    help="downscale so the longest side is at most this (0 = full photo resolution)")
     ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stages 2-3)")
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
@@ -41,7 +43,7 @@ def main():
     prefix.parent.mkdir(parents=True, exist_ok=True)
 
     if args.style == "ink":
-        s = ink(args.image)
+        s = ink(args.image, InkParams(max_side=args.max_side))
         h, w = s["gray"].shape
         layers = [("heavy", 1.5, order(s["heavy"])),
                   ("medium", 1.0, order(s["medium"])),
@@ -58,7 +60,7 @@ def main():
         return
 
     e = extract(args.image, EdgeParams(method="teed" if args.edges.startswith("teed") else "classic",
-                                       teed_ridges=args.edges == "teed+ridges"))
+                                       teed_ridges=args.edges == "teed+ridges", max_side=args.max_side))
     h, w = e["gray"].shape
     f = e["detail"]
     if args.stage == 1:

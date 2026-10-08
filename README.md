@@ -43,7 +43,12 @@ Its edge map already reads like a pen drawing, so ink mode traces it as faithful
 - Line weight comes from how boldly the network drew each line: the top 15% go to the `heavy`
   pen layer and the bottom 35% to `fine`.
 
-Takes ~20–35 s per photo on CPU. The classic pipeline below is still available via `--style`.
+Takes ~20–35 s per photo on CPU. TEED uses an NVIDIA GPU automatically when PyTorch can see
+one. On Windows, PyPI's PyTorch is CPU-only, so point uv at a CUDA build (the same
+`[tool.uv.sources]` pattern as the CPU-only snippet above, with
+`url = "https://download.pytorch.org/whl/cu128"` and `marker = "sys_platform == 'win32'"`).
+Check with `uv run python -c "from sketchart import teed; print(teed.DEVICE)"`.
+For print-quality output use the full photo: `--max-side 0`. The classic pipeline below is still available via `--style`.
 
 ## Stages
 
