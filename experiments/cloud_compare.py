@@ -60,6 +60,11 @@ def main():
     name = out / f"{Path(args.photo).stem.replace('_clean', '')}_nanobananapro_{args.prompt}_{args.resolution}"
     raw = Path(f"{name}_raw.png")
     klein._call(f"/view?filename={img['filename']}&subfolder={img['subfolder']}&type={img['type']}", out=raw)
+    if args.prompt in klein.PAINTED:
+        # A painting for print: keep its colour, no plotter strokes.
+        raw.replace(f"{name}.png")
+        print(json.dumps({"painting": f"{name}.png", "seconds": round(time.time() - t0, 1)}))
+        return
     bw = klein.black_and_white(cv2.imread(str(raw)))
     cv2.imwrite(f"{name}.png", bw)
     size, layers, _ = vectorise(bw)
