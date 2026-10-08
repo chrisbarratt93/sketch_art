@@ -136,9 +136,10 @@ def ridges(gray, scales, keep):
     return centre, band
 
 
-def teed_edges(bgr, f, p):
+def teed_edges(bgr, f, p, lo=None, hi=None):
     """Learned edges as 1px centrelines on the `f` x grid. Returns
-    (mask, probability)."""
+    (mask, probability). `lo`/`hi` override p's thresholds and may be per-pixel
+    arrays on the `f` x grid (np.inf draws nothing there)."""
     from . import teed
     big = cv2.resize(bgr, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
     # Run at teed_scale x photo size but return on the f x grid directly:
@@ -146,7 +147,7 @@ def teed_edges(bgr, f, p):
     prob = teed.edge_probability(big, p.teed_scale / f)
     # The network's "no edge" output is sigmoid(min smish) ~ 0.438, not 0.
     prob = np.clip((prob - 0.438) / (1 - 0.438), 0, 1)
-    strong = apply_hysteresis_threshold(prob, p.teed_lo, p.teed_hi)
+    strong = apply_hysteresis_threshold(prob, p.teed_lo if lo is None else lo, p.teed_hi if hi is None else hi)
     # TEED's lines are already narrow, so the skeleton of the confident band is
     # its centreline. (Non-max suppression with 45-degree steps leaves it dotted.)
     return skeletonize(strong), prob
