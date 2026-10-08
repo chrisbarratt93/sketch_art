@@ -18,7 +18,7 @@ import numpy as np
 
 from sketchart.edges import EdgeParams, extract
 from sketchart.output import render, write_svg
-from sketchart.stylise import StyleParams, stylise
+from sketchart.stylise import PRESETS, preset, stylise
 from sketchart.tone import ToneParams, tone
 from sketchart.trace import order, trace, travel_stats
 
@@ -27,7 +27,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("image")
     ap.add_argument("-o", "--out", default=None, help="output prefix (default: out/<image name>)")
-    ap.add_argument("--stage", type=int, choices=(1, 2, 3), default=3)
+    ap.add_argument("--stage", type=int, choices=(1, 2, 3), default=2)
+    ap.add_argument("--style", choices=sorted(PRESETS), default="plain")
     ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stages 2-3)")
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
@@ -37,15 +38,17 @@ def main():
 
     e = extract(args.image, EdgeParams())
     h, w = e["gray"].shape
+    f = e["detail"]
     if args.stage == 1:
         layers = [
-            ("contours", 1.4, order(trace(e["contours"], min_len=12))),
-            ("lines", 1.0, order(trace(e["lines"], min_len=10))),
+            ("contours", 1.4, order(trace(e["contours"], min_len=12, scale=f))),
+            ("lines", 1.0, order(trace(e["lines"], min_len=10, scale=f))),
         ]
     else:
         # Dense, unsimplified paths: stylise does its own fitting.
-        s = stylise(trace(e["contours"], min_len=4, eps=0), trace(e["lines"], min_len=4, eps=0),
-                    e["flat"], StyleParams(seed=args.seed))
+        s = stylise(trace(e["contours"], min_len=4, eps=0, scale=f),
+                    trace(e["lines"], min_len=4, eps=0, scale=f),
+                    e["flat"], preset(args.style, seed=args.seed))
         layers = [("heavy", 1.6, order(s["heavy"])),
                   ("medium", 1.1, order(s["medium"])),
                   ("fine", 0.7, order(s["fine"]))]
@@ -68,7 +71,7 @@ def main():
         cv2.imwrite(f"{prefix}_weights.png", weights)
     if args.debug:
         cv2.imwrite(f"{prefix}_flat.png", e["flat"])
-        masks = np.full((h, w, 3), 255, np.uint8)
+        masks = np.full((h * f, w * f, 3), 255, np.uint8)
         masks[e["lines"]] = (200, 120, 0)
         masks[e["contours"]] = (0, 0, 220)
         cv2.imwrite(f"{prefix}_masks.png", masks)

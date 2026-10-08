@@ -63,49 +63,91 @@ def simplify(pts, eps):
     return cv2.approxPolyDP(pts.reshape(-1, 1, 2), eps, False).reshape(-1, 2)
 
 
-def stitch(paths, gap):
-    """Join paths end-to-end where their ends lie within `gap` px and roughly
-    continue each other's direction. Fewer, longer strokes read more like a
-    confident hand and save pen lifts."""
+def stitch(paths, gap, reach=8, max_turn=40.0, bridge=0.0):
+    """Join paths end-to-end where their ends lie within `gap` px and continue
+    each other's direction (good continuation). Skeleton tracing breaks a line
+    at every junction, so an arch crossed by fifteen bars arrives as sixteen
+    pieces; this puts it back together.
+
+    All candidate joins are ranked and taken best-first, so at a junction the
+    straightest continuation wins rather than whichever piece came first.
+    Directions are measured `reach` points back from the end, because the
+    skeleton bends right at a junction.
+
+    Ends further apart than `gap` but within `bridge` are joined only when
+    they line up: each lies on the other's line of travel. That closes the
+    gaps left where a crossing bar interrupted an edge."""
     paths = [p for p in paths if len(p) >= 2]
+    n = len(paths)
+    if n < 2:
+        return paths
 
-    def end_dir(p, at_end):
-        a, b = (p[-1], p[max(0, len(p) - 4)]) if at_end else (p[0], p[min(len(p) - 1, 3)])
-        d = a - b
-        n = np.linalg.norm(d)
-        return d / n if n else d
+    def end_dir(p, e):
+        k = min(reach, len(p) - 1)
+        d = (p[-1] - p[-1 - k]) if e else (p[0] - p[k])
+        return d / (np.linalg.norm(d) + 1e-9)
 
-    changed = True
-    while changed:
-        changed = False
-        ends = np.array([[p[0], p[-1]] for p in paths]).reshape(-1, 2)  # 2 ends per path
-        alive = [True] * len(paths)
-        for i in range(len(paths)):
-            if not alive[i]:
+    pts = np.array([[p[0], p[-1]] for p in paths], float).reshape(-1, 2)
+    dirs = np.array([[end_dir(p, 0), end_dir(p, 1)] for p in paths]).reshape(-1, 2)
+    cands = []
+    lim = -np.cos(np.radians(max_turn))
+    for k in range(2 * n):
+        dist = np.linalg.norm(pts - pts[k], axis=1)
+        for m in np.flatnonzero(dist <= max(gap, bridge)):
+            if m <= k or m // 2 == k // 2:
                 continue
-            for i_end in (1, 0):
-                pt = paths[i][-1] if i_end else paths[i][0]
-                d = np.linalg.norm(ends - pt, axis=1)
-                d[2 * i:2 * i + 2] = np.inf
-                for k in np.argsort(d)[:4]:
-                    if d[k] > gap:
-                        break
-                    j, j_end = divmod(int(k), 2)
-                    if not alive[j]:
-                        continue
-                    # Outward direction at i's end should oppose j's outward direction.
-                    if np.dot(end_dir(paths[i], i_end), end_dir(paths[j], j_end)) > -0.5:
-                        continue
-                    a = paths[i] if i_end else paths[i][::-1]
-                    b = paths[j][::-1] if j_end else paths[j]
-                    paths[i] = np.vstack([a, b])
-                    alive[j] = False
-                    ends[2 * j:2 * j + 2] = np.inf
-                    ends[2 * i], ends[2 * i + 1] = paths[i][0], paths[i][-1]
-                    changed = True
-                    break
-        paths = [p for p, a in zip(paths, alive) if a]
-    return paths
+            dot = dirs[k] @ dirs[m]
+            if dot >= lim:  # outward directions must oppose: one continues the other
+                continue
+            if dist[m] > gap:
+                v = pts[m] - pts[k]
+                ahead = v @ dirs[k]
+                perp = lambda d: np.array([-d[1], d[0]])
+                side = max(abs(v @ perp(dirs[k])), abs(v @ perp(dirs[m])))
+                if ahead <= 0 or side > max(2.0, 0.2 * dist[m]) or dot > -np.cos(np.radians(20)):
+                    continue
+            cands.append((dist[m] / max(gap, bridge) + (1 + dot) * 4, k, m))
+    cands.sort()
+
+    link = {}                       # end id -> end id it joins
+    parent = list(range(n))         # no cycles: a closed loop stays open
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for _, k, m in cands:
+        if k in link or m in link or find(k // 2) == find(m // 2):
+            continue
+        link[k], link[m] = m, k
+        parent[find(k // 2)] = find(m // 2)
+
+    # Walk each chain from a free end.
+    out, used = [], set()
+    for start in range(n):
+        if start in used:
+            continue
+        # Find a chain end: move along links until an end with no partner.
+        i, e = start, 0
+        seen = set()
+        while 2 * i + e in link and i not in seen:
+            seen.add(i)
+            j = link[2 * i + e]
+            i, e = j // 2, 1 - j % 2
+        # (i, e) is a free end; build the chain from it.
+        chain = []
+        while True:
+            used.add(i)
+            p = paths[i] if e == 0 else paths[i][::-1]
+            chain.append(p)
+            far = 2 * i + (1 - e)
+            if far not in link:
+                break
+            j = link[far]
+            i, e = j // 2, j % 2
+        out.append(np.vstack(chain))
+    return out
 
 
 def order(paths):
@@ -125,10 +167,13 @@ def order(paths):
     return out
 
 
-def trace(mask, min_len=8.0, eps=0.9, gap=4.0):
+def trace(mask, min_len=8.0, eps=0.9, gap=4.0, scale=1, bridge=10.0):
+    """Trace a mask drawn at `scale` x photo size; lengths and the returned
+    coordinates are in photo pixels. Dense paths keep ~1 point per photo px."""
     paths = skeleton_paths(mask)
-    paths = stitch(paths, gap)
-    paths = [simplify(p, eps) for p in paths]
+    paths = stitch(paths, gap * scale, reach=6 * scale, bridge=bridge * scale)
+    paths = [np.vstack([p[:-1:scale], p[-1:]]) / scale for p in paths]
+    paths = [simplify(p.astype(np.float32), eps) for p in paths]
     paths = [p for p in paths if path_length(p) >= min_len]
     return paths
 

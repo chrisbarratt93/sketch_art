@@ -14,6 +14,10 @@ Contours that just run along the flank of a detected line are dropped, so a
 thin bar becomes one stroke, not three.
 
 Both come out as 1-pixel-wide binary masks, ready to trace into pen strokes.
+Detection runs on an upsampled copy of the photo (`detail`, default 2x): the
+masks are that much finer than the photo's pixel grid, so traced strokes land
+to half a pixel and bars only a pixel or two wide are still resolved. All
+lengths below are in photo pixels and are scaled internally.
 """
 
 from dataclasses import dataclass
@@ -30,10 +34,11 @@ class EdgeParams:
     max_side: int = 1400              # working resolution (longest side, px)
     contour_sigma: float = 2.0        # blur before Canny
     contour_keep: float = 10.0        # % of pixels counted as strong gradient
-    ridge_scales: tuple = (1.5, 2.5)  # Hessian scales ~ half-width of bars (px)
-    ridge_keep: float = 6.0           # % of pixels counted as strong ridge
+    ridge_scales: tuple = (1.0, 1.5, 2.5)  # Hessian scales ~ half-width of bars (px)
+    ridge_keep: float = 7.0           # % of pixels counted as strong ridge
     min_component: int = 25           # drop specks smaller than this (px)
     margin: int = 4                   # ignore this many px at the border
+    detail: int = 2                   # run detection at this multiple of the photo size
 
 
 def load_gray(path, max_side):
@@ -59,12 +64,18 @@ def flatten(gray):
 
 
 def contours(gray, sigma, keep):
-    blurred = cv2.GaussianBlur(gray, (0, 0), sigma)
+    # Float throughout: on an upsampled image, gentle gradients are under one
+    # grey level per pixel and an 8-bit blur would quantise them away.
+    blurred = cv2.GaussianBlur(gray.astype(np.float32), (0, 0), sigma)
+    dx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0)
+    dy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1)
     # Thresholds from the gradient distribution, not fixed numbers, so the
     # same settings work on bright and dull photos.
-    mag = np.hypot(cv2.Sobel(blurred, cv2.CV_32F, 1, 0), cv2.Sobel(blurred, cv2.CV_32F, 0, 1))
+    mag = np.hypot(dx, dy)
     hi = np.percentile(mag, 100 - keep)
-    return cv2.Canny(blurred, 0.4 * hi / 4, hi / 4, L2gradient=True) > 0
+    k = 30000 / (mag.max() + 1e-6)  # Canny wants int16 gradients
+    to16 = lambda g: np.clip(g * k, -32767, 32767).astype(np.int16)
+    return cv2.Canny(to16(dx), to16(dy), 0.4 * hi / 4 * k, hi / 4 * k, L2gradient=True) > 0
 
 
 def ridge_response(gray, scales):
@@ -82,6 +93,12 @@ def ridge_response(gray, scales):
         bright = np.where(np.abs(l2) > 2 * np.abs(l1), -l2, 0)
         dark = np.where(np.abs(l1) > 2 * np.abs(l2), l1, 0)
         resp = s * s * np.maximum(bright, dark)
+        # The centre of a real bar is flat across (no gradient); the shoulder
+        # of something wider than this scale (a panel, a wall) is steep.
+        # Reject shoulders, or wide light areas get mistaken for bars.
+        g = cv2.GaussianBlur(img, (0, 0), s)
+        grad = s * np.hypot(cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=1), cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=1)) / 2
+        resp *= np.clip(1 - grad / (resp + 1e-6), 0, 1)
         # Angle (row, col frame) of l1's eigenvector; l2's is perpendicular.
         theta1 = 0.5 * np.arctan2(2 * Hrc, Hrr - Hcc)
         theta = np.where(dark >= bright, theta1, theta1 + np.pi / 2)
@@ -120,21 +137,28 @@ def thin(mask, min_size):
 
 
 def extract(path, p=EdgeParams()):
+    """Masks "contours" and "lines" are at `detail` x the photo size (divide
+    traced coordinates by p.detail); "gray" and "flat" are at photo size."""
     color, gray = load_gray(path, p.max_side)
+    f = p.detail
     flat = flatten(gray)
+    # Smooth at photo size, then upsample: smoothing at the larger size averages
+    # over 4x the pixels and washes out low-contrast detail.
+    work = cv2.resize(flat, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC) if f > 1 else flat
 
-    centre, line_band = ridges(flat, p.ridge_scales, p.ridge_keep)
-    lines = thin(centre, p.min_component)
+    centre, line_band = ridges(work, [s * f for s in p.ridge_scales], p.ridge_keep)
+    lines = thin(centre, p.min_component * f)
 
-    edge = contours(flat, p.contour_sigma, p.contour_keep)
+    edge = contours(work, p.contour_sigma * f, p.contour_keep)
     # A contour inside (a slightly grown) ridge band is just the flank of a bar.
-    band = cv2.dilate(line_band.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
-    contour = thin(edge & ~band, p.min_component)
+    k = 4 * f + 1   # ~2 photo px either side
+    band = cv2.dilate(line_band.astype(np.uint8), np.ones((k, k), np.uint8)) > 0
+    contour = thin(edge & ~band, p.min_component * f)
 
     # Filters misbehave at the image border; nothing worth drawing lives there.
-    m = p.margin
+    m = p.margin * f
     for k in (lines, contour):
         k[:m], k[-m:], k[:, :m], k[:, -m:] = False, False, False, False
 
-    return {"color": color, "gray": gray, "flat": flat,
+    return {"color": color, "gray": gray, "flat": flat, "detail": f,
             "contours": contour, "lines": lines, "ridge_band": line_band}

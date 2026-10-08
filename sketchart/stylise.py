@@ -42,14 +42,42 @@ class StyleParams:
     drop_pct: float = 30.0        # drop this % of strokes, lowest scores first
     vignette: float = 1.0         # size of the drawn area (bigger = less fade)
     ground_fade: float = 0.72     # below the focal point the drawn area is this much shorter
+    sky_reach: float = 1.0        # above the focal point it is this much taller
     heavy_reach: float = 0.75     # heavy lines only this far into the vignette (0..1)
     heavy_pct: float = 8.0        # top % of contours drawn heavy
     heavy_min_len: float = 40.0   # heavy strokes must be at least this long
     indicate: float = 0.35        # chance of skipping a bar inside a repeating run
     fine_len: float = 40.0        # thin-bar strokes shorter than this are fine
-    overshoot: float = 6.0        # max corner overshoot (px)
+    overshoot: float = 6.0        # max overshoot at a free line end (px)
     wobble: float = 0.55          # hand wobble amplitude (px)
+    angle_jitter: float = 0.35    # sd of a straight stroke's tilt off true (degrees)
+    curve_smooth: float = 1.5     # extra smoothing of curved strokes (px)
+    vp_count: int = 3             # perspective directions to find (0 = off)
+    vp_snap_deg: float = 2.0      # snap lines this close to a vanishing direction onto it
+    join_reach: float = 12.0      # extend/trim a line end up to this far to meet a corner (0 = off)
+    join_deg: float = 25.0        # lines must differ by this much to form a corner
+    corner_over: tuple = (1.5, 5.0)  # how far lines cross past a joined corner (px)
+    hand: bool = True             # False: geometry only, no selection/weight/hand effects
     seed: int = 1
+
+
+PRESETS = {
+    # Geometry only: every detected line, cleaned up (straightened, merged,
+    # perspective-snapped, corners joined) but not selected, weighted or
+    # hand-styled. For judging detection and geometry on their own.
+    "plain": dict(hand=False, curve_smooth=2.5, join_reach=16.0, min_len=5.0),
+    # Loose urban sketch: fades, indicates repeats, visible hand.
+    "loose": dict(),
+    # Architect's sketch: accurate perspective, corners that meet and cross,
+    # more of the detail kept, steadier hand.
+    "architect": dict(drop_pct=15.0, indicate=0.0, wobble=0.22, angle_jitter=0.08,
+                      curve_smooth=2.5, ground_fade=0.65, sky_reach=1.4, heavy_pct=6.0, min_len=7.0,
+                      join_reach=16.0),
+}
+
+
+def preset(name, **overrides):
+    return StyleParams(**{**PRESETS[name], **overrides})
 
 
 # ---------------------------------------------------------------- geometry
@@ -106,9 +134,72 @@ def classify(paths, p):
             c, u, dev, (t0, t1) = fit_line(piece)
             if dev <= p.straight_tol + 0.01 * length:
                 straights.append(np.array([c + t0 * u, c + t1 * u]))
+                continue
+            core = straight_core(piece, p)
+            poly = as_polygon(piece, p) if core is None else [core]
+            if poly is not None:
+                straights += poly
             else:
-                curves.append(simplify(piece, 0.5))
+                curves.append(piece)   # dense: smoothing comes later, simplifying last
     return straights, curves
+
+
+def straight_core(pts, p, min_core=0.6):
+    """A straight edge whose ends curl into rounded corners (the top of a
+    panel) -> one straight stroke spanning it. Corner joining later squares
+    it up with its neighbours."""
+    s = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
+    total = s[-1]
+    if total < 8:
+        return None
+    for trim in np.arange(0.05, (1 - min_core) / 2 + 1e-9, 0.05):
+        mid = pts[(s >= trim * total) & (s <= (1 - trim) * total)]
+        if len(mid) < 3:
+            return None
+        c, u, dev, _ = fit_line(mid)
+        if dev <= p.straight_tol:
+            # The trimmed ends must turn sharply away (a rounded corner), not
+            # drift gently (an arch, whose middle can also look straight).
+            for end, inner in ((pts[0], mid[0]), (pts[-1], mid[-1])):
+                d = end - inner
+                n = np.linalg.norm(d)
+                if n > 1.5 and abs(d @ u) / n > np.cos(np.radians(35)):
+                    return None
+            t = (pts - c) @ u
+            return np.array([c + t.min() * u, c + t.max() * u])
+    return None
+
+
+def as_polygon(pts, p, min_side=4.0, min_turn=50.0):
+    """A curve that is really a few straight sides with rounded corners (a
+    window panel, a door) -> its straight sides, squared off. Real curves
+    (arches) need many small turns to approximate and are left alone."""
+    v = simplify(pts.astype(np.float32), max(1.2, p.straight_tol)).astype(float)
+    # A rounded corner simplifies to a short bevel: replace it with the
+    # sharp corner where the neighbouring sides meet.
+    k = 1
+    while 1 <= k < len(v) - 2:
+        if np.linalg.norm(v[k + 1] - v[k]) < min_side:
+            a0, a1, b0, b1 = v[k - 1], v[k], v[k + 1], v[k + 2]
+            da, db = a1 - a0, b1 - b0
+            den = da[0] * db[1] - da[1] * db[0]
+            if abs(den) > 1e-6:
+                t = ((b0 - a0)[0] * db[1] - (b0 - a0)[1] * db[0]) / den
+                x = a0 + t * da
+                if np.linalg.norm(x - (a1 + b0) / 2) < 2 * min_side:
+                    v = np.vstack([v[:k], x, v[k + 2:]])
+                    continue
+        k += 1
+    if len(v) < 3 or len(v) > 6:
+        return None
+    d = np.diff(v, axis=0)
+    sides = np.linalg.norm(d, axis=1)
+    if sides.min() < min_side:
+        return None
+    cos = np.sum(d[:-1] * d[1:], 1) / (sides[:-1] * sides[1:])
+    if np.degrees(np.arccos(np.clip(cos, -1, 1))).min() < min_turn:
+        return None
+    return [np.array([v[k], v[k + 1]]) for k in range(len(v) - 1)]
 
 
 def merge_collinear(segs, kinds, p, rounds=3):
@@ -170,6 +261,139 @@ def merge_collinear(segs, kinds, p, rounds=3):
     return list(segs), list(kinds)
 
 
+def _homog_lines(S):
+    """Homogeneous line through each segment's endpoints."""
+    a = np.hstack([S[:, 0], np.ones((len(S), 1))])
+    b = np.hstack([S[:, 1], np.ones((len(S), 1))])
+    l = np.cross(a, b)
+    return l / (np.linalg.norm(l[:, :2], axis=1, keepdims=True) + 1e-12)
+
+
+def _vp_error(v, mids, dirs):
+    """Angle (deg) between each segment and the direction from its midpoint
+    to vanishing point v (homogeneous, so v at infinity is a direction)."""
+    to = v[None, :2] - mids * v[2]
+    cos = np.abs(np.sum(to * dirs, 1)) / (np.linalg.norm(to, axis=1) * np.linalg.norm(dirs, axis=1) + 1e-12)
+    return np.degrees(np.arccos(np.clip(cos, 0, 1)))
+
+
+def vanishing_points(segs, p, rng, min_len=25.0, inlier_deg=1.5, iters=600):
+    """RANSAC the dominant perspective directions: points where many long
+    lines meet (or directions, for lines that stay parallel)."""
+    S = np.array(segs, float)
+    d = S[:, 1] - S[:, 0]
+    L = np.linalg.norm(d, axis=1)
+    mids = S.mean(1)
+    lines = _homog_lines(S)
+    remaining = L >= min_len
+    centre = mids.mean(0)
+    vps = []
+    for _ in range(p.vp_count):
+        idx = np.flatnonzero(remaining)
+        if len(idx) < 4:
+            break
+        w = L[idx] / L[idx].sum()
+        best, best_score = None, 0.0
+        for _ in range(iters):
+            a, b = rng.choice(idx, 2, replace=False, p=w)
+            v = np.cross(lines[a], lines[b])
+            if not np.any(v):
+                continue
+            v = v / np.linalg.norm(v)
+            # Must be a different direction (seen from the image centre) from
+            # the ones already found, or the dominant one gets found twice.
+            if any(_vp_error(v, centre[None], (u[:2] - centre * u[2])[None])[0] < 8 for u in vps):
+                continue
+            score = L[idx][_vp_error(v, mids[idx], d[idx]) < inlier_deg].sum()
+            if score > best_score:
+                best, best_score = v, score
+        if best is None:
+            break
+        vps.append(best)
+        remaining[idx[_vp_error(best, mids[idx], d[idx]) < 3 * inlier_deg]] = False
+    return vps
+
+
+def snap_to_vps(segs, vps, snap_deg, min_len=10.0):
+    """Rotate each line about its midpoint to aim exactly at the vanishing
+    point it nearly aims at already. Parallel edges then converge properly."""
+    if not vps:
+        return segs
+    out = []
+    for seg in segs:
+        a, b = seg
+        d = b - a
+        L = np.linalg.norm(d)
+        m = (a + b) / 2
+        errs = [(_vp_error(v, m[None], d[None])[0], v) for v in vps]
+        err, v = min(errs, key=lambda e: e[0])
+        if L < min_len or err > snap_deg:
+            out.append(seg)
+            continue
+        to = v[:2] - m * v[2]
+        u = to / np.linalg.norm(to)
+        if u @ d < 0:
+            u = -u
+        out.append(np.array([m - u * L / 2, m + u * L / 2]))
+    return out
+
+
+def join_corners(segs, p):
+    """Move each line end to its intersection with a crossing line nearby, so
+    corners meet exactly. Returns the segments and, per end, "L" (a corner
+    where both lines end), "T" (ends against the other line's side) or None."""
+    S = np.array(segs, float)
+    n = len(S)
+    ends = [[None, None] for _ in range(n)]
+    if n < 2 or p.join_reach <= 0:
+        return list(S), ends
+    d = S[:, 1] - S[:, 0]
+    L = np.linalg.norm(d, axis=1) + 1e-9
+    u = d / L[:, None]
+    reaches = np.minimum(np.clip(0.35 * L, p.join_reach, 2.5 * p.join_reach), 0.5 * L)
+    new = S.copy()
+    cross = lambda a, b: a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
+    cos_lim = np.cos(np.radians(p.join_deg))
+    for i in range(n):
+        # Long lines (roof slopes) may reach further: a finial or a gutter
+        # often hides the last bit of a long edge.
+        reach = reaches[i]
+        for e in (0, 1):
+            P = S[i, e]
+            out = u[i] if e else -u[i]
+            # Candidates: steep enough to make a corner, and near this end.
+            rel = P - S[:, 0]
+            along = np.clip(np.sum(rel * u, 1), 0, L)
+            near = np.linalg.norm(rel - along[:, None] * u, axis=1) < reach * 1.5
+            cand = np.flatnonzero(near & (np.abs(u @ u[i]) < cos_lim))
+            cand = cand[cand != i]
+            if not len(cand):
+                continue
+            denom = cross(out, u[cand])
+            q = S[cand, 0] - P
+            t = cross(q, u[cand]) / denom           # along this line, past the end
+            s = cross(q, out) / denom               # along the other line
+            past = np.maximum(0, np.maximum(-s, s - L[cand]))
+            # Reaching far is only believable where both lines stop short of a
+            # shared corner (a gable apex behind a finial). Running into the
+            # side of another line, only close a small gap.
+            at_end_j = (s < reaches[cand]) | (s > L[cand] - reaches[cand])
+            # ...and for that, the two lines' ends must actually be close.
+            j_end = np.where((s < L[cand] / 2)[:, None], S[cand, 0], S[cand, 1])
+            at_end_j &= np.linalg.norm(j_end - P, axis=1) <= reach
+            lim = np.where(at_end_j, reach, min(reach, 0.6 * p.join_reach))
+            ok = (t <= lim) & (t >= -0.6 * reach) & (past <= np.maximum(reach, reaches[cand]))
+            if not ok.any():
+                continue
+            cost = np.where(ok, np.abs(t) + past, np.inf)
+            k = int(np.argmin(cost))
+            j = cand[k]
+            new[i, e] = P + t[k] * out
+            at_end = s[k] < reaches[j] or s[k] > L[j] - reaches[j]
+            ends[i][e] = "L" if at_end else "T"
+    return list(new), ends
+
+
 # ---------------------------------------------------------------- importance
 
 def contrast_map(flat):
@@ -190,7 +414,7 @@ def focal_point(contrast):
     return np.array([(xs * w).sum() / w.sum(), (ys * w).sum() / w.sum()])
 
 
-def vignette_field(shape, centre, scale, ground, rng):
+def vignette_field(shape, centre, scale, ground, rng, sky=1.0):
     """>1 outside the drawn area. Elliptical around the focal point, with a
     soft random edge so strokes peter out raggedly, as when a sketcher stops.
     Sketchers lose interest in the ground long before the sky edge of the
@@ -201,7 +425,7 @@ def vignette_field(shape, centre, scale, ground, rng):
     # doesn't leave one side of the subject undrawn.
     rx = scale * 1.05 * max(centre[0], w - centre[0])
     ry = scale * 1.0 * max(centre[1], h - centre[1])
-    ry = np.where(ys > centre[1], ry * ground, ry)
+    ry = np.where(ys > centre[1], ry * ground, ry * sky)
     r = np.sqrt(((xs - centre[0]) / rx) ** 2 + ((ys - centre[1]) / ry) ** 2)
     noise = gaussian_filter(rng.standard_normal((h, w)).astype(np.float32), 25)
     noise /= np.abs(noise).max() + 1e-9
@@ -265,7 +489,8 @@ def resample(pts, step):
 
 
 def clip_to_field(pts, field, limit=1.0):
-    """Cut a stroke wherever it leaves the drawn area; returns the inside runs."""
+    """Cut a stroke wherever it leaves the drawn area; returns the inside runs
+    (a run that reaches an original end keeps that end's exact position)."""
     dense = resample(pts, 2.0)
     inside = sample(field, dense) < limit
     runs, cur = [], []
@@ -305,16 +530,22 @@ def hand_line(pts, rng, wobble, bow=True):
     return simplify((dense + normal * offset[:, None]).astype(np.float32), 0.25)
 
 
-def hand_straight(seg, rng, p):
+def hand_straight(seg, rng, p, ends=(None, None)):
     a, b = seg
     d = b - a
     L = np.linalg.norm(d)
     u = d / L
-    # Overshoot past corners, or now and then stop short of them.
-    ext = lambda: rng.uniform(-0.3, 1.0) * min(p.overshoot, 0.12 * L)
-    a, b = a - u * ext(), b + u * ext()
+
+    def ext(kind):
+        if kind == "L":   # joined corner: cross through it, architect-style
+            return rng.uniform(*p.corner_over) * min(1.0, L / 30)
+        if kind == "T":   # ends on another line's side: just touch it
+            return rng.uniform(0, 0.4 * p.corner_over[0])
+        # Free end: overshoot a little, or now and then stop short.
+        return rng.uniform(-0.3, 1.0) * min(p.overshoot, 0.12 * L)
+    a, b = a - u * ext(ends[0]), b + u * ext(ends[1])
     # A fraction of a degree off true, about the midpoint.
-    ang = np.radians(rng.normal(0, 0.35))
+    ang = np.radians(rng.normal(0, p.angle_jitter))
     c, s = np.cos(ang), np.sin(ang)
     m = (a + b) / 2
     R = np.array([[c, -s], [s, c]])
@@ -343,7 +574,7 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
     rng = np.random.default_rng(p.seed)
     contrast = contrast_map(flat)
     focus = focal_point(contrast)
-    field = vignette_field(flat.shape, focus, p.vignette, p.ground_fade, rng)
+    field = vignette_field(flat.shape, focus, p.vignette, p.ground_fade, rng, p.sky_reach)
     diag = np.hypot(*flat.shape)
     blurred = cv2.GaussianBlur(flat, (0, 0), 5).astype(np.float32) / 255
 
@@ -356,8 +587,20 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
     # Merge across both kinds: a bar and an edge on the same line are one stroke.
     straight = [x for x in strokes if x["straight"]]
     segs, kinds = merge_collinear([x["geom"] for x in straight], [x["kind"] for x in straight], p)
+    # Perspective: aim lines at their vanishing points, merge again now that
+    # they agree, then make corners meet.
+    if p.vp_count and segs:
+        segs = snap_to_vps(segs, vanishing_points(segs, p, rng), p.vp_snap_deg)
+        segs, kinds = merge_collinear(segs, kinds, p, rounds=1)
+    segs, ends = join_corners(segs, p)
     strokes = [x for x in strokes if not x["straight"]] + [
-        {"geom": g, "straight": True, "kind": k} for g, k in zip(segs, kinds)]
+        {"geom": g, "straight": True, "kind": k, "ends": e} for g, k, e in zip(segs, kinds, ends)]
+
+    if not p.hand:
+        out = {"heavy": [], "fine": [], "field": field, "medium": [
+            x["geom"] if x["straight"] else simplify(smooth_path(x["geom"], p.curve_smooth), 0.3)
+            for x in strokes if path_length(x["geom"]) >= p.min_len]}
+        return out
 
     # Clip to the vignette, then score what's left.
     clipped = []
@@ -365,8 +608,16 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
         for run in clip_to_field(x["geom"], field):
             if path_length(run) < p.min_len:
                 continue
-            geom = np.array([run[0], run[-1]]) if x["straight"] else run
-            clipped.append({**x, "geom": geom})
+            y = {**x}
+            if x["straight"]:
+                g = x["geom"]
+                # Ends cut by the vignette are free; untouched ends keep their joins.
+                same = [np.linalg.norm(run[0] - g[0]) < 2.5, np.linalg.norm(run[-1] - g[1]) < 2.5]
+                y["geom"] = np.array([g[0] if same[0] else run[0], g[1] if same[1] else run[-1]])
+                y["ends"] = [x["ends"][0] if same[0] else None, x["ends"][1] if same[1] else None]
+            else:
+                y["geom"] = run
+            clipped.append(y)
     for x in clipped:
         pts = resample(x["geom"], 2.0)
         L = path_length(pts)
@@ -399,7 +650,10 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
             w = "fine"
         else:
             w = "medium"
-        stroke = hand_straight(x["geom"], rng, p) if x["straight"] else hand_line(x["geom"], rng, p.wobble * 0.7)
+        if x["straight"]:
+            stroke = hand_straight(x["geom"], rng, p, x["ends"])
+        else:
+            stroke = hand_line(smooth_path(x["geom"], p.curve_smooth), rng, p.wobble * 0.7)
         out[w].append(stroke)
         if w == "heavy":
             second = reinforce(stroke, rng)

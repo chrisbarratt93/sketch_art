@@ -6,23 +6,42 @@ Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 
 ```
 pip install -r requirements.txt
-python sketch.py examples/market_hall.jpg --debug           # stage 3 -> out/market_hall.svg, _preview.png
-python sketch.py examples/market_hall.jpg --stage 1         # foundation only
-python sketch.py examples/market_hall.jpg --stage 2         # line only, no tone
-python sketch.py examples/market_hall.jpg --seed 7          # same drawing, different "hand"
+python sketch.py examples/market_hall.jpg                       # line geometry only (current default)
+python sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
+python sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
+python sketch.py examples/market_hall.jpg --stage 1             # raw foundation
+python sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
 ```
 
 ## Stages
 
-1. **Foundation (done, first pass)**: extract the lines an artist would draw.
+1. **Foundation**: extract the lines an artist would draw.
+   - Detection runs at 2× the photo size (smoothing at 1×, then upsampled), so strokes land to
+     half a pixel and 1–2px bars are resolved. Canny runs on float gradients, because 8-bit blurs
+     quantise away gentle gradients at 2×.
+   - The ridge detector rejects the *shoulders* of things wider than a bar (panels, walls), so wide
+     light areas aren't mistaken for bars.
+   - Tracing re-links skeleton pieces through junctions by good continuation (best match first),
+     and bridges gaps where a crossing bar interrupted an edge, as long as the two ends line up.
    - *Contours* (step edges between tones) come from Canny on a bilateral-flattened, CLAHE image.
    - *Lines* (thin bars such as glazing bars, mullions and railings) come from Hessian ridge/valley
      detection with non-max suppression. You get one stroke down the middle of each bar, not the
      two-sided "sausage" plain edge detection produces.
    - Contours that only flank a detected bar are dropped. Masks are traced into polylines,
      stitched end-to-end, simplified, and ordered to cut pen-up travel.
-2. **Stylise line (done, first pass)** in `sketchart/stylise.py`. Output is three layers
-   (`heavy` / `medium` / `fine`), one per pen.
+2. **Geometry + stylise line** in `sketchart/stylise.py`. `--style plain` (the current default)
+   runs only the geometry steps and draws every line at one weight. That makes it possible to
+   judge detection and geometry without selection or hand effects getting in the way.
+   - *Geometry*:
+     - Collinear fragments are merged.
+     - Straight edges whose ends curl into rounded corners are squared off.
+     - Vanishing points are found by RANSAC, and lines within 2° of one are snapped onto it.
+     - Line ends are extended or trimmed to meet at real corners. Long reaches are only allowed
+       where both lines stop short of a shared corner, e.g. a gable apex hidden by a finial.
+   - `--style architect`: steady hand, joined corners cross by 1.5–5px, light pruning, sky kept.
+   - `--style loose`: the original urban-sketch look.
+
+   Styled output is three layers (`heavy` / `medium` / `fine`), one per pen.
    - *Decisive strokes*: paths are split at corners. Near-straight runs become true straight
      strokes, and collinear fragments are merged across gaps, so broken building edges become
      one line.
