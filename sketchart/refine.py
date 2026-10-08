@@ -46,6 +46,13 @@ class RefineParams:
     taper: float = 6.0          # taper length at a stroke's free ends (px)
 
 
+# Starting points found with review_klein.py.
+PRESETS = {
+    "plain": dict(),
+    "tidy": dict(smooth=2.5, steady=True, min_len=5.0, bridge=6.0, straight_tol=0.7),
+}
+
+
 def vectorise(gray, p):
     """-> (strokes in drawing px, distance-to-paper map in drawing px on the
     `detail` grid, fill mask at drawing size)."""

@@ -1,0 +1,152 @@
+{
+ "albert_hall/plain": {
+  "strokes": 20295,
+  "length": 225074,
+  "doubled": 0.374,
+  "wobble": 0.4,
+  "short": 0.575,
+  "loops": 51,
+  "jitter": 0.227,
+  "diff": 2.23
+ },
+ "albert_hall/smooth": {
+  "strokes": 20295,
+  "length": 219043,
+  "doubled": 0.359,
+  "wobble": 0.327,
+  "short": 0.588,
+  "loops": 51,
+  "jitter": 0.129,
+  "diff": 2.83
+ },
+ "albert_hall/tidy": {
+  "strokes": 9137,
+  "length": 204152,
+  "doubled": 0.352,
+  "wobble": 0.402,
+  "short": 0.157,
+  "loops": 1,
+  "jitter": 0.162,
+  "diff": 3.23
+ },
+ "market_hall/plain": {
+  "strokes": 19976,
+  "length": 270160,
+  "doubled": 0.438,
+  "wobble": 0.406,
+  "short": 0.538,
+  "loops": 53,
+  "jitter": 0.214,
+  "diff": 2.39
+ },
+ "market_hall/smooth": {
+  "strokes": 19976,
+  "length": 263550,
+  "doubled": 0.426,
+  "wobble": 0.334,
+  "short": 0.549,
+  "loops": 51,
+  "jitter": 0.123,
+  "diff": 3.15
+ },
+ "market_hall/tidy": {
+  "strokes": 9443,
+  "length": 250010,
+  "doubled": 0.423,
+  "wobble": 0.396,
+  "short": 0.137,
+  "loops": 1,
+  "jitter": 0.143,
+  "diff": 3.55
+ },
+ "cotswold_street/plain": {
+  "strokes": 24775,
+  "length": 221500,
+  "doubled": 0.318,
+  "wobble": 0.447,
+  "short": 0.548,
+  "loops": 69,
+  "jitter": 0.254,
+  "diff": 2.38
+ },
+ "cotswold_street/smooth": {
+  "strokes": 24775,
+  "length": 214426,
+  "doubled": 0.3,
+  "wobble": 0.365,
+  "short": 0.565,
+  "loops": 68,
+  "jitter": 0.151,
+  "diff": 3.23
+ },
+ "cotswold_street/tidy": {
+  "strokes": 12124,
+  "length": 197112,
+  "doubled": 0.288,
+  "wobble": 0.455,
+  "short": 0.166,
+  "loops": 2,
+  "jitter": 0.199,
+  "diff": 3.76
+ },
+ "mill_pond/plain": {
+  "strokes": 20003,
+  "length": 200443,
+  "doubled": 0.394,
+  "wobble": 0.431,
+  "short": 0.518,
+  "loops": 43,
+  "jitter": 0.253,
+  "diff": 2.41
+ },
+ "mill_pond/smooth": {
+  "strokes": 20003,
+  "length": 194266,
+  "doubled": 0.374,
+  "wobble": 0.347,
+  "short": 0.534,
+  "loops": 42,
+  "jitter": 0.157,
+  "diff": 3.16
+ },
+ "mill_pond/tidy": {
+  "strokes": 10060,
+  "length": 181882,
+  "doubled": 0.363,
+  "wobble": 0.42,
+  "short": 0.147,
+  "loops": 0,
+  "jitter": 0.187,
+  "diff": 3.53
+ },
+ "park/plain": {
+  "strokes": 35155,
+  "length": 255710,
+  "doubled": 0.383,
+  "wobble": 0.535,
+  "short": 0.615,
+  "loops": 113,
+  "jitter": 0.277,
+  "diff": 3.01
+ },
+ "park/smooth": {
+  "strokes": 35155,
+  "length": 245990,
+  "doubled": 0.356,
+  "wobble": 0.445,
+  "short": 0.633,
+  "loops": 111,
+  "jitter": 0.171,
+  "diff": 3.65
+ },
+ "park/tidy": {
+  "strokes": 15600,
+  "length": 218232,
+  "doubled": 0.339,
+  "wobble": 0.537,
+  "short": 0.19,
+  "loops": 3,
+  "jitter": 0.219,
+  "diff": 4.37
+ }
+}

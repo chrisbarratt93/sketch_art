@@ -110,6 +110,35 @@ ink mode only.
   Apache-2.0 and LaMa's code is Apache-2.0, but the Mask2Former checkpoint is listed as "other" and
   the `fashn-ai/LaMa` repackaging has no licence tag.
 
+## Refining generated drawings (`sketchart/refine.py`)
+
+Makes the marks in a generated ink drawing look deliberate. It vectorises the drawing into
+strokes, keeping each one's drawn width. Width is measured from the ink a line carries, so faint
+lines stay light. Cleanup passes then work on the strokes, and the strokes are redrawn at exact
+widths. Dense dark texture (foliage masses, black beams) is kept as fill using the drawing's own
+pixels. `PRESETS["tidy"]`:
+- drop fragments under 5px
+- re-join aligned breaks up to 6px
+- smooth jitter between real corners
+- straighten runs within 0.7px of a line
+- draw each stroke at a steady width with tapered ends
+
+`uv run review_klein.py -v name:param=value,...` compares variants on fixed 1:1 crops of
+`examples/drawings/*_klein.png` (sheets in `out/review_klein/`, snapshot in `docs/refine/`).
+Metrics: strokes, short marks, small loops, wobble, jitter, and `diff`, the % difference between
+the re-rendered drawing and klein's.
+
+| (Albert Hall) | strokes | short marks | loops | jitter | diff vs klein |
+|---|---|---|---|---|---|
+| plain re-render | 20,295 | 58% | 51 | 0.23 | 2.2% |
+| tidy | 9,137 | 16% | 1 | 0.16 | 3.2% |
+
+Known gaps:
+- Foliage is mostly dense fill, which stroke cleanup doesn't touch. It needs redrawing as
+  deliberate leaf-cluster marks.
+- `min_len` also removes genuine short marks in grass.
+- The faintest texture (fine stone hatching) is lost at the 180 ink threshold.
+
 ## Review harness
 
 `uv run review.py` renders fixed close-up crops (tracery, lettering, stonework, skyline, panels,
