@@ -5,12 +5,13 @@ iDraw, GRBL/Klipper DIY machines). Output is vector SVG strokes, one
 Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 
 ```
-pip install -r requirements.txt
-python sketch.py examples/market_hall.jpg                       # line geometry only (current default)
-python sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
-python sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
-python sketch.py examples/market_hall.jpg --stage 1             # raw foundation
-python sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
+uv sync                    # core install
+uv sync --extra learned    # + PyTorch for the learned edge detector (experimental, not wired in yet)
+uv run sketch.py examples/market_hall.jpg                       # line geometry only (current default)
+uv run sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
+uv run sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
+uv run sketch.py examples/market_hall.jpg --stage 1             # raw foundation
+uv run sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
 ```
 
 ## Stages

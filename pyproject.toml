@@ -1,0 +1,21 @@
+[project]
+name = "sketchart"
+version = "0.1.0"
+description = "Photo to pen-plotter ink drawing"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    # contrib build: provides cv2.ximgproc (structured edge forests)
+    "opencv-contrib-python-headless>=4.10",
+    "scikit-image>=0.26",
+    "scipy>=1.13",
+]
+
+[project.optional-dependencies]
+# Learned edge detection (TEED). On Linux, PyPI's torch wheel bundles CUDA;
+# see README for a CPU-only index if you want a smaller install.
+learned = ["torch>=2.4"]
+
+[tool.uv]
+package = false

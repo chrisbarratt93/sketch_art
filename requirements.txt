@@ -1,4 +1,0 @@
-numpy
-opencv-python-headless
-scikit-image>=0.26
-scipy
