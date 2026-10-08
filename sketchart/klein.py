@@ -83,6 +83,22 @@ PROMPTS = {
         "muddy or grey, while every ink line and detail stays crisp and visible. Leave white paper in "
         "the sky and highlights, and let the washes fade out to bare white watercolour paper towards "
         "the edges of the picture."),
+    # watercolour_ink_vibrant, with the ink pushed to look deliberately hand-drawn rather than generated.
+    "watercolour_ink_hand": (
+        "Turn this photo into a loose watercolour painting with pen and ink line work, made by hand by "
+        "a skilled urban sketcher on location. Keep the exact composition, framing and perspective of "
+        "the photo, and paint only what is in it: add nothing. The ink must look unmistakably hand "
+        "drawn: confident, deliberate, continuous pen strokes with natural variation in pressure and "
+        "line weight, each line placed on purpose by the artist's hand. No speckle, no stippled noise, "
+        "no fuzzy broken fragments, no scratchy over-rendered texture, and no uniform machine-like "
+        "detail spread evenly everywhere. Every mark is a choice: the artist draws detail only where it "
+        "matters, at the focal point and on key edges, windows, columns and tree trunks, and elsewhere "
+        "suggests stonework, tiles, foliage and grass with a few economical, well-chosen strokes or "
+        "leaves them to the wash. Transparent watercolour washes laid loosely over the lines, soft "
+        "wet-in-wet edges, colour that strays a little past the lines, gentle granulation and blooms. "
+        "Fresh, clear and vibrant colour: saturated, luminous washes in the photo's own hues, a little "
+        "richer than the photo, never muddy or grey. Leave white paper in the sky and highlights, and "
+        "let the washes fade out to bare white watercolour paper towards the edges of the picture."),
     "watercolour_ink_detailed": (
         "Turn this photo into a detailed pen and ink drawing with watercolour, as a skilled "
         "architectural illustrator would make it. Keep the exact composition, framing and perspective "
@@ -117,7 +133,7 @@ FAITHFUL = (
     "splash that is not in the photo, and do not leave out any building, tree, hill or water.")
 
 # Styles that are paintings, not pen drawings: kept in colour/tone and not traced for the plotter.
-PAINTED = {"watercolour_ink", "watercolour_ink_vibrant", "watercolour_ink_detailed", "pen_and_wash", "pencil"}
+PAINTED = {"watercolour_ink", "watercolour_ink_vibrant", "watercolour_ink_hand", "watercolour_ink_detailed", "pen_and_wash", "pencil"}
 
 
 @dataclass
