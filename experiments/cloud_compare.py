@@ -113,8 +113,12 @@ def review(photo, painting, key, model="gemini-3-pro-preview"):
     graph["show"] = {"class_type": "PreviewAny", "inputs": {"source": ["ask", 0]}}
     text = "".join(str(t) for o in _run(graph, key).values() for t in o.get("text", []))
     try:
-        return json.loads(text[text.index("{"):text.rindex("}") + 1])["problems"]
-    except (ValueError, KeyError):
+        # Usually {"problems": [...]}, but Gemini sometimes answers with the bare list.
+        start = min(i for i in (text.find("{"), text.find("[")) if i >= 0)
+        end = max(text.rfind("}"), text.rfind("]")) + 1
+        found = json.loads(text[start:end])
+        return found["problems"] if isinstance(found, dict) else found
+    except (ValueError, KeyError, TypeError):
         return [{"type": "review", "where": "", "what": f"unreadable review: {text[:200]}"}]
 
 
