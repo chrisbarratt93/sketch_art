@@ -50,6 +50,25 @@ one. On Windows, PyPI's PyTorch is CPU-only, so point uv at a CUDA build (the sa
 Check with `uv run python -c "from sketchart import teed; print(teed.DEVICE)"`.
 For print-quality output use the full photo: `--max-side 0`. The classic pipeline below is still available via `--style`.
 
+## Review harness
+
+`uv run review.py` renders fixed close-up crops (tracery, lettering, stonework, skyline, panels,
+gable, timber gable, foliage) from the three test photos at print zoom. It writes them to
+`out/review/` as photo | baseline | variants sheets and prints metrics (`sketchart/metrics.py`):
+- `doubled`: share of line length that runs beside a parallel line, i.e. both outlines of one
+  feature.
+- `wobble`: how far near-straight strokes stray from a true straight line.
+- `short`: share of tiny marks.
+- `loops`: small closed blobs.
+- `invented` / `missed`: fidelity against the uncleaned trace.
+
+Try a variant with `-v name:param=value,...`, e.g. `-v c4:collapse=4`. TEED maps are cached, so
+variants take seconds after the first run.
+
+Cleanup passes (`sketchart/cleanup.py`):
+- `collapse_pairs` (ink default 3px): where two outlines run parallel and face each other
+  within 3px, draw their midline once and drop the rounded end caps.
+
 ## Stages
 
 1. **Foundation**: extract the lines an artist would draw.
@@ -66,8 +85,7 @@ For print-quality output use the full photo: `--max-side 0`. The classic pipelin
      two-sided "sausage" plain edge detection produces.
    - Contours that only flank a detected bar are dropped. Masks are traced into polylines,
      stitched end-to-end, simplified, and ordered to cut pen-up travel.
-2. **Geometry + stylise line** in `sketchart/stylise.py`. `--style plain` (the current default)
-   runs only the geometry steps and draws every line at one weight. That makes it possible to
+2. **Geometry + stylise line** in `sketchart/stylise.py`. `--style plain` runs only the geometry steps and draws every line at one weight. That makes it possible to
    judge detection and geometry without selection or hand effects getting in the way.
    - *Geometry*:
      - Collinear fragments are merged.

@@ -1,0 +1,122 @@
+{
+ "albert_hall/baseline": {
+  "strokes": 9326,
+  "length": 170077,
+  "doubled": 0.672,
+  "wobble": 0.386,
+  "short": 0.372,
+  "loops": 87,
+  "invented": 0.0,
+  "missed": 0.003
+ },
+ "albert_hall/v3": {
+  "strokes": 6719,
+  "length": 147534,
+  "doubled": 0.594,
+  "wobble": 0.436,
+  "short": 0.291,
+  "loops": 50,
+  "invented": 0.0,
+  "missed": 0.011
+ },
+ "albert_hall/v4": {
+  "strokes": 6253,
+  "length": 130238,
+  "doubled": 0.427,
+  "wobble": 0.564,
+  "short": 0.268,
+  "loops": 46,
+  "invented": 0.0,
+  "missed": 0.037
+ },
+ "albert_hall/v5": {
+  "strokes": 5739,
+  "length": 128275,
+  "doubled": 0.383,
+  "wobble": 0.663,
+  "short": 0.223,
+  "loops": 38,
+  "invented": 0.0,
+  "missed": 0.053
+ },
+ "market_hall/baseline": {
+  "strokes": 4791,
+  "length": 102005,
+  "doubled": 0.725,
+  "wobble": 0.375,
+  "short": 0.365,
+  "loops": 24,
+  "invented": 0.0,
+  "missed": 0.001
+ },
+ "market_hall/v3": {
+  "strokes": 3321,
+  "length": 88127,
+  "doubled": 0.644,
+  "wobble": 0.443,
+  "short": 0.279,
+  "loops": 7,
+  "invented": 0.0,
+  "missed": 0.008
+ },
+ "market_hall/v4": {
+  "strokes": 3092,
+  "length": 78458,
+  "doubled": 0.497,
+  "wobble": 0.539,
+  "short": 0.269,
+  "loops": 8,
+  "invented": 0.0,
+  "missed": 0.03
+ },
+ "market_hall/v5": {
+  "strokes": 2780,
+  "length": 76597,
+  "doubled": 0.438,
+  "wobble": 0.65,
+  "short": 0.219,
+  "loops": 6,
+  "invented": 0.0,
+  "missed": 0.044
+ },
+ "cotswold/baseline": {
+  "strokes": 13049,
+  "length": 152379,
+  "doubled": 0.522,
+  "wobble": 0.55,
+  "short": 0.453,
+  "loops": 79,
+  "invented": 0.0,
+  "missed": 0.008
+ },
+ "cotswold/v3": {
+  "strokes": 8581,
+  "length": 137873,
+  "doubled": 0.463,
+  "wobble": 0.663,
+  "short": 0.324,
+  "loops": 30,
+  "invented": 0.0,
+  "missed": 0.016
+ },
+ "cotswold/v4": {
+  "strokes": 7787,
+  "length": 134347,
+  "doubled": 0.405,
+  "wobble": 0.766,
+  "short": 0.284,
+  "loops": 29,
+  "invented": 0.0,
+  "missed": 0.024
+ },
+ "cotswold/v5": {
+  "strokes": 6868,
+  "length": 135445,
+  "doubled": 0.378,
+  "wobble": 0.818,
+  "short": 0.242,
+  "loops": 26,
+  "invented": 0.0,
+  "missed": 0.032
+ }
+}
