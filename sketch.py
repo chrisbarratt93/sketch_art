@@ -2,9 +2,11 @@
 
 Stage 1: extract contours and thin lines and trace them into strokes.
 Stage 2: stylise those strokes so they read as hand-drawn ink.
+Stage 3: add tone with hatching and cross-hatching.
 
     python sketch.py examples/market_hall.jpg -o out/market_hall
     python sketch.py examples/market_hall.jpg --stage 1    # raw foundation only
+    python sketch.py examples/market_hall.jpg --stage 2    # line only, no tone
 """
 
 import argparse
@@ -17,6 +19,7 @@ import numpy as np
 from sketchart.edges import EdgeParams, extract
 from sketchart.output import render, write_svg
 from sketchart.stylise import StyleParams, stylise
+from sketchart.tone import ToneParams, tone
 from sketchart.trace import order, trace, travel_stats
 
 
@@ -24,8 +27,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("image")
     ap.add_argument("-o", "--out", default=None, help="output prefix (default: out/<image name>)")
-    ap.add_argument("--stage", type=int, choices=(1, 2), default=2)
-    ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stage 2)")
+    ap.add_argument("--stage", type=int, choices=(1, 2, 3), default=3)
+    ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stages 2-3)")
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
 
@@ -46,10 +49,18 @@ def main():
         layers = [("heavy", 1.6, order(s["heavy"])),
                   ("medium", 1.1, order(s["medium"])),
                   ("fine", 0.7, order(s["fine"]))]
+        if args.stage == 3:
+            t = tone(e["gray"], s["field"], ToneParams(seed=args.seed + 1))
+            layers += [(f"hatch{i}", 0.6, order(strokes)) for i, strokes in enumerate(t["passes"], 1)]
 
     write_svg(f"{prefix}.svg", (w, h), layers)
     cv2.imwrite(f"{prefix}_preview.png", render((w, h), layers))
-    if args.debug and args.stage == 2:
+    if args.debug and args.stage == 3:
+        shade = np.full((h, w), 255, np.uint8)
+        for k, m in enumerate(t["regions"], 1):
+            shade[m] = 255 - 70 * k
+        cv2.imwrite(f"{prefix}_tone.png", np.hstack([(255 * (1 - t["dark"])).astype(np.uint8), shade]))
+    if args.debug and args.stage >= 2:
         weights = np.full((h, w, 3), 255, np.uint8)
         for (_, _, paths), col in zip(layers, [(0, 0, 220), (40, 40, 40), (200, 140, 0)]):
             for pth in paths:

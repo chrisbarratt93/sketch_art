@@ -6,8 +6,9 @@ Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 
 ```
 pip install -r requirements.txt
-python sketch.py examples/market_hall.jpg --debug           # stage 2 -> out/market_hall.svg, _preview.png
+python sketch.py examples/market_hall.jpg --debug           # stage 3 -> out/market_hall.svg, _preview.png
 python sketch.py examples/market_hall.jpg --stage 1         # foundation only
+python sketch.py examples/market_hall.jpg --stage 2         # line only, no tone
 python sketch.py examples/market_hall.jpg --seed 7          # same drawing, different "hand"
 ```
 
@@ -36,10 +37,26 @@ python sketch.py examples/market_hall.jpg --seed 7          # same drawing, diff
    - *The hand*: corners overshoot or stop short, lines sit up to about ±0.35° off true, long
      lines bow slightly, and every line has a low-frequency wobble. All of this is seeded and
      reproducible.
-   - Known gaps: the foreground (pavement, bollards) is still busier than an artist would draw
-     it, and the small curves in arched windows can look scribbly.
-3. **Tone**: directional hatching and cross-hatching driven by a tone map, following surface
-   orientation where possible. Keep the sky mostly empty.
+   - *Ground fade*: the drawn area is shorter below the focal point than above it, and heavy
+     lines aren't allowed near the fading edge, so the foreground dissolves into a few loose
+     lines.
+   - Known gap: the small curves in arched windows can look scribbly.
+3. **Tone (done, first pass)** in `sketchart/tone.py`. Output is three extra layers,
+   `hatch1`–`hatch3`.
+   - Darkness comes from a bilateral-smoothed image stretched to the photo's own range. Lights
+     stay white paper: hatching starts at 50% darkness, cross-hatching at 66%, and a third pass
+     between the first set's lines starts at 80%.
+   - Regions are closed and then opened. Closing bridges thin light bars, so a glazed wall reads
+     as one toned area while wide light panels stay white. Opening removes slivers too thin to
+     hatch.
+   - Strokes are laid in *patches*: bands of 5–10 adjacent lines share their break points, giving
+     blocks of short parallel strokes with ragged ends and small gaps. Each stroke gets angle
+     jitter and a slight wobble.
+   - The sky (smooth area connected to the top edge) stays empty. Hatching stops sooner than the
+     line work at the vignette, so the drawing fades from tone to line to paper.
+   - Known gaps: all hatching uses one direction. Artists often turn it to follow each plane, e.g.
+     along the perspective lines of a wall. Pen-up travel is high (~0.6× pen-down), which a
+     boustrophedon order within each patch would fix.
 4. **Plot**: page sizing in mm, pen-width-aware hatch spacing, layer per pen, vpype/AxiDraw export.
 
 ## Reference / assessment

@@ -41,6 +41,8 @@ class StyleParams:
     min_len: float = 9.0          # drop strokes shorter than this after merging
     drop_pct: float = 30.0        # drop this % of strokes, lowest scores first
     vignette: float = 1.0         # size of the drawn area (bigger = less fade)
+    ground_fade: float = 0.72     # below the focal point the drawn area is this much shorter
+    heavy_reach: float = 0.75     # heavy lines only this far into the vignette (0..1)
     heavy_pct: float = 8.0        # top % of contours drawn heavy
     heavy_min_len: float = 40.0   # heavy strokes must be at least this long
     indicate: float = 0.35        # chance of skipping a bar inside a repeating run
@@ -188,15 +190,18 @@ def focal_point(contrast):
     return np.array([(xs * w).sum() / w.sum(), (ys * w).sum() / w.sum()])
 
 
-def vignette_field(shape, centre, scale, rng):
+def vignette_field(shape, centre, scale, ground, rng):
     """>1 outside the drawn area. Elliptical around the focal point, with a
-    soft random edge so strokes peter out raggedly, as when a sketcher stops."""
+    soft random edge so strokes peter out raggedly, as when a sketcher stops.
+    Sketchers lose interest in the ground long before the sky edge of the
+    subject, so the ellipse is shorter below the focus (`ground` < 1)."""
     h, w = shape
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     # Reach to whichever image edge is further, so an off-centre focus
     # doesn't leave one side of the subject undrawn.
     rx = scale * 1.05 * max(centre[0], w - centre[0])
     ry = scale * 1.0 * max(centre[1], h - centre[1])
+    ry = np.where(ys > centre[1], ry * ground, ry)
     r = np.sqrt(((xs - centre[0]) / rx) ** 2 + ((ys - centre[1]) / ry) ** 2)
     noise = gaussian_filter(rng.standard_normal((h, w)).astype(np.float32), 25)
     noise /= np.abs(noise).max() + 1e-9
@@ -333,11 +338,12 @@ def reinforce(stroke, rng, offset=0.8):
 # ---------------------------------------------------------------- pipeline
 
 def stylise(contour_paths, line_paths, flat, p=StyleParams()):
-    """Returns {"heavy": [...], "medium": [...], "fine": [...]} stroke lists."""
+    """Returns {"heavy": [...], "medium": [...], "fine": [...]} stroke lists,
+    plus "field": the vignette (>1 = outside the drawing), for later stages."""
     rng = np.random.default_rng(p.seed)
     contrast = contrast_map(flat)
     focus = focal_point(contrast)
-    field = vignette_field(flat.shape, focus, p.vignette, rng)
+    field = vignette_field(flat.shape, focus, p.vignette, p.ground_fade, rng)
     diag = np.hypot(*flat.shape)
     blurred = cv2.GaussianBlur(flat, (0, 0), 5).astype(np.float32) / 255
 
@@ -366,7 +372,10 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
         L = path_length(pts)
         x["len"] = L
         x["contrast"] = float(sample(contrast, pts).mean())
-        dist = np.linalg.norm(pts.mean(0) - focus) / diag
+        x["reach"] = float(sample(field, pts).max())
+        off = pts.mean(0) - focus
+        off[1] /= p.ground_fade if off[1] > 0 else 1   # the ground matters less
+        dist = np.linalg.norm(off) / diag
         x["focus"] = 0.4 + 0.6 * np.exp(-(dist / 0.35) ** 2)
         x["score"] = x["contrast"] * np.sqrt(L) * x["focus"]
         x["sep"] = tone_separation(blurred, pts)
@@ -378,12 +387,13 @@ def stylise(contour_paths, line_paths, flat, p=StyleParams()):
     # Weight hierarchy: heavy goes to long lines with very different tone on
     # either side, i.e. silhouettes and major shadow boundaries.
     heavy_key = lambda x: x["sep"] * np.sqrt(x["len"]) * x["focus"]
-    cands = [x for x in clipped if x["len"] >= p.heavy_min_len]
+    can_be_heavy = lambda x: x["len"] >= p.heavy_min_len and x["reach"] <= p.heavy_reach
+    cands = [x for x in clipped if can_be_heavy(x)]
     share = min(100.0, p.heavy_pct * len(clipped) / max(len(cands), 1))
     heavy_cut = np.percentile([heavy_key(x) for x in cands], 100 - share) if cands else np.inf
-    out = {"heavy": [], "medium": [], "fine": []}
+    out = {"heavy": [], "medium": [], "fine": [], "field": field}
     for x in clipped:
-        if x["len"] >= p.heavy_min_len and heavy_key(x) >= heavy_cut:
+        if can_be_heavy(x) and heavy_key(x) >= heavy_cut:
             w = "heavy"
         elif x["kind"] == "line" and (x["len"] < p.fine_len or x["contrast"] < 0.5):
             w = "fine"
