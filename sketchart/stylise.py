@@ -170,7 +170,7 @@ def straight_core(pts, p, min_core=0.6):
     return None
 
 
-def as_polygon(pts, p, min_side=4.0, min_turn=50.0):
+def as_polygon(pts, p, min_side=7.0, min_turn=50.0):
     """A curve that is really a few straight sides with rounded corners (a
     window panel, a door) -> its straight sides, squared off. Real curves
     (arches) need many small turns to approximate and are left alone."""

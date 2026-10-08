@@ -7,6 +7,7 @@ then order them to keep pen-up travel short.
 
 import numpy as np
 import cv2
+from scipy.spatial import cKDTree
 
 NEIGHBOURS = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
@@ -91,22 +92,23 @@ def stitch(paths, gap, reach=8, max_turn=40.0, bridge=0.0):
     dirs = np.array([[end_dir(p, 0), end_dir(p, 1)] for p in paths]).reshape(-1, 2)
     cands = []
     lim = -np.cos(np.radians(max_turn))
-    for k in range(2 * n):
-        dist = np.linalg.norm(pts - pts[k], axis=1)
-        for m in np.flatnonzero(dist <= max(gap, bridge)):
+    tree = cKDTree(pts)
+    for k, near in enumerate(tree.query_ball_point(pts, max(gap, bridge))):
+        for m in near:
             if m <= k or m // 2 == k // 2:
                 continue
+            dist_m = np.linalg.norm(pts[m] - pts[k])
             dot = dirs[k] @ dirs[m]
             if dot >= lim:  # outward directions must oppose: one continues the other
                 continue
-            if dist[m] > gap:
+            if dist_m > gap:
                 v = pts[m] - pts[k]
                 ahead = v @ dirs[k]
                 perp = lambda d: np.array([-d[1], d[0]])
                 side = max(abs(v @ perp(dirs[k])), abs(v @ perp(dirs[m])))
-                if ahead <= 0 or side > max(2.0, 0.2 * dist[m]) or dot > -np.cos(np.radians(20)):
+                if ahead <= 0 or side > max(2.0, 0.2 * dist_m) or dot > -np.cos(np.radians(20)):
                     continue
-            cands.append((dist[m] / max(gap, bridge) + (1 + dot) * 4, k, m))
+            cands.append((dist_m / max(gap, bridge) + (1 + dot) * 4, k, m))
     cands.sort()
 
     link = {}                       # end id -> end id it joins
@@ -151,26 +153,53 @@ def stitch(paths, gap, reach=8, max_turn=40.0, bridge=0.0):
 
 
 def order(paths):
-    """Greedy nearest-neighbour ordering, flipping paths when the far end is closer."""
-    remaining = list(range(len(paths)))
+    """Greedy nearest-neighbour ordering, flipping paths when the far end is
+    closer. A KD-tree over all path ends keeps it fast for tens of thousands
+    of strokes."""
+    n = len(paths)
+    if n == 0:
+        return []
+    ends = np.array([[p[0], p[-1]] for p in paths], float).reshape(-1, 2)
+    tree = cKDTree(ends)
+    done = np.zeros(n, bool)
     out, pos = [], np.zeros(2)
-    while remaining:
-        starts = np.array([paths[i][0] for i in remaining])
-        ends = np.array([paths[i][-1] for i in remaining])
-        ds, de = np.linalg.norm(starts - pos, axis=1), np.linalg.norm(ends - pos, axis=1)
-        k = int(np.argmin(np.minimum(ds, de)))
-        p = paths[remaining.pop(k)]
-        if de[k] < ds[k]:
-            p = p[::-1]
+    for _ in range(n):
+        k = 8
+        while True:
+            _, idx = tree.query(pos, k=min(k, 2 * n))
+            idx = np.atleast_1d(idx)
+            free = [i for i in idx if not done[i // 2]]
+            if free or k >= 2 * n:
+                break
+            k *= 4
+        i = free[0]
+        done[i // 2] = True
+        p = paths[i // 2] if i % 2 == 0 else paths[i // 2][::-1]
         out.append(p)
         pos = p[-1]
     return out
 
 
-def trace(mask, min_len=8.0, eps=0.9, gap=4.0, scale=1, bridge=10.0):
+def prune_spurs(paths, mask, max_len):
+    """Drop short dead-end twigs: paths with one free end (a skeleton pixel
+    with a single neighbour) shorter than `max_len`. Skeletonising a band of
+    varying width sprouts these along every line."""
+    deg = cv2.filter2D(mask.astype(np.uint8), -1, np.ones((3, 3), np.float32)) - 1
+    keep = []
+    for p in paths:
+        if len(p) < 2 or path_length(p) >= max_len:
+            keep.append(p)
+            continue
+        free = [deg[int(q[1]), int(q[0])] == 1 for q in (p[0], p[-1])]
+        if sum(free) != 1:   # isolated specks and bridges between junctions stay
+            keep.append(p)
+    return keep
+
+
+def trace(mask, min_len=8.0, eps=0.9, gap=4.0, scale=1, bridge=10.0, spur=2.0):
     """Trace a mask drawn at `scale` x photo size; lengths and the returned
     coordinates are in photo pixels. Dense paths keep ~1 point per photo px."""
-    paths = skeleton_paths(mask)
+    paths = prune_spurs(skeleton_paths(mask), mask, spur * scale)
     paths = stitch(paths, gap * scale, reach=6 * scale, bridge=bridge * scale)
     paths = [np.vstack([p[:-1:scale], p[-1:]]) / scale for p in paths]
     paths = [simplify(p.astype(np.float32), eps) for p in paths]

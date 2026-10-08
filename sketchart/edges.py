@@ -39,6 +39,11 @@ class EdgeParams:
     min_component: int = 25           # drop specks smaller than this (px)
     margin: int = 4                   # ignore this many px at the border
     detail: int = 2                   # run detection at this multiple of the photo size
+    method: str = "classic"           # "classic" (Canny + ridges) or "teed" (learned edges)
+    teed_scale: float = 2.0           # run TEED at this multiple of the photo size
+    teed_ridges: bool = False         # with "teed": also add ridge centrelines for thin bars
+    teed_hi: float = 0.45             # TEED hysteresis thresholds (normalised probability)
+    teed_lo: float = 0.2
 
 
 def load_gray(path, max_side):
@@ -131,6 +136,22 @@ def ridges(gray, scales, keep):
     return centre, band
 
 
+def teed_edges(bgr, f, p):
+    """Learned edges as 1px centrelines on the `f` x grid. Returns
+    (mask, probability)."""
+    from . import teed
+    big = cv2.resize(bgr, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+    # Run at teed_scale x photo size but return on the f x grid directly:
+    # resampling the thin output lines down and up again aliases them.
+    prob = teed.edge_probability(big, p.teed_scale / f)
+    # The network's "no edge" output is sigmoid(min smish) ~ 0.438, not 0.
+    prob = np.clip((prob - 0.438) / (1 - 0.438), 0, 1)
+    strong = apply_hysteresis_threshold(prob, p.teed_lo, p.teed_hi)
+    # TEED's lines are already narrow, so the skeleton of the confident band is
+    # its centreline. (Non-max suppression with 45-degree steps leaves it dotted.)
+    return skeletonize(strong), prob
+
+
 def thin(mask, min_size):
     mask = remove_small_objects(mask, max_size=min_size, connectivity=2)
     return skeletonize(mask)
@@ -148,11 +169,17 @@ def extract(path, p=EdgeParams()):
 
     centre, line_band = ridges(work, [s * f for s in p.ridge_scales], p.ridge_keep)
     lines = thin(centre, p.min_component * f)
-
-    edge = contours(work, p.contour_sigma * f, p.contour_keep)
-    # A contour inside (a slightly grown) ridge band is just the flank of a bar.
     k = 4 * f + 1   # ~2 photo px either side
     band = cv2.dilate(line_band.astype(np.uint8), np.ones((k, k), np.uint8)) > 0
+
+    if p.method == "teed":
+        edge, prob = teed_edges(color, f, p)
+        if not p.teed_ridges:
+            lines = np.zeros_like(lines)
+            band = np.zeros_like(band)
+    else:
+        edge = contours(work, p.contour_sigma * f, p.contour_keep)
+    # A contour inside (a slightly grown) ridge band is just the flank of a bar.
     contour = thin(edge & ~band, p.min_component * f)
 
     # Filters misbehave at the image border; nothing worth drawing lives there.

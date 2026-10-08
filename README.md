@@ -6,7 +6,7 @@ Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 
 ```
 uv sync                    # core install
-uv sync --extra learned    # + PyTorch for the learned edge detector (experimental, not wired in yet)
+uv sync --extra learned    # + PyTorch for the learned edge detector (needed by the default ink style)
 ```
 
 On Linux, PyPI's PyTorch wheel bundles CUDA (several GB). For a CPU-only install, add this to
@@ -23,12 +23,27 @@ explicit = true
 ```
 
 ```
-uv run sketch.py examples/market_hall.jpg                       # line geometry only (current default)
+uv run sketch.py examples/albert_hall.jpg                       # ink: faithful trace of learned edges (default)
+uv run sketch.py examples/albert_hall.jpg --stage 3             # ink + hatched tone
+uv run sketch.py examples/market_hall.jpg --style plain         # classic edges, geometry only
 uv run sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
 uv run sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
 uv run sketch.py examples/market_hall.jpg --stage 1             # raw foundation
 uv run sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
 ```
+
+## Ink mode (current best)
+
+`--style ink` (`sketchart/ink.py`) runs TEED, a small learned edge detector trained on
+human-annotated edges in urban photos (`sketchart/teed.py`, MIT, weights fetched on first use).
+Its edge map already reads like a pen drawing, so ink mode traces it as faithfully as possible:
+- The confident part of the map is skeletonised to centrelines and traced into strokes, short
+  marks included.
+- Strokes get stair-step smoothing only. There is no straightening, merging or snapping.
+- Line weight comes from how boldly the network drew each line: the top 15% go to the `heavy`
+  pen layer and the bottom 35% to `fine`.
+
+Takes ~20–35 s per photo on CPU. The classic pipeline below is still available via `--style`.
 
 ## Stages
 

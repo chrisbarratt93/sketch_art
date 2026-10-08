@@ -18,6 +18,7 @@ import numpy as np
 
 from sketchart.edges import EdgeParams, extract
 from sketchart.output import render, write_svg
+from sketchart.ink import ink
 from sketchart.stylise import PRESETS, preset, stylise
 from sketchart.tone import ToneParams, tone
 from sketchart.trace import order, trace, travel_stats
@@ -28,7 +29,10 @@ def main():
     ap.add_argument("image")
     ap.add_argument("-o", "--out", default=None, help="output prefix (default: out/<image name>)")
     ap.add_argument("--stage", type=int, choices=(1, 2, 3), default=2)
-    ap.add_argument("--style", choices=sorted(PRESETS), default="plain")
+    ap.add_argument("--edges", choices=("classic", "teed", "teed+ridges"), default="classic",
+                    help="edge source: classic (Canny + ridges) or learned TEED (needs `uv sync --extra learned`)")
+    ap.add_argument("--style", choices=["ink"] + sorted(PRESETS), default="ink",
+                    help="ink (default): trace the learned TEED edge map faithfully (needs `uv sync --extra learned`)")
     ap.add_argument("--seed", type=int, default=1, help="hand-wobble seed (stages 2-3)")
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
@@ -36,7 +40,25 @@ def main():
     prefix = Path(args.out or Path("out") / Path(args.image).stem)
     prefix.parent.mkdir(parents=True, exist_ok=True)
 
-    e = extract(args.image, EdgeParams())
+    if args.style == "ink":
+        s = ink(args.image)
+        h, w = s["gray"].shape
+        layers = [("heavy", 1.5, order(s["heavy"])),
+                  ("medium", 1.0, order(s["medium"])),
+                  ("fine", 0.6, order(s["fine"]))]
+        if args.stage == 3:
+            t = tone(s["gray"], np.zeros((h, w), np.float32), ToneParams(seed=args.seed + 1))
+            layers += [(f"hatch{i}", 0.6, order(strokes)) for i, strokes in enumerate(t["passes"], 1)]
+        write_svg(f"{prefix}.svg", (w, h), layers)
+        cv2.imwrite(f"{prefix}_preview.png", render((w, h), layers))
+        if args.debug:
+            prob = cv2.resize(s["prob"], (w, h), interpolation=cv2.INTER_AREA)
+            cv2.imwrite(f"{prefix}_teed.png", (255 * (1 - prob)).astype(np.uint8))
+        print(json.dumps({"size": [w, h], **travel_stats([p for _, _, p in layers])}))
+        return
+
+    e = extract(args.image, EdgeParams(method="teed" if args.edges.startswith("teed") else "classic",
+                                       teed_ridges=args.edges == "teed+ridges"))
     h, w = e["gray"].shape
     f = e["detail"]
     if args.stage == 1:
