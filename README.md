@@ -5,8 +5,8 @@ iDraw, GRBL/Klipper DIY machines). Output is vector SVG strokes, one
 Inkscape layer per pen pass. The PNG is only a preview of what the pen draws.
 
 ```
-uv sync                    # core install
-uv sync --extra learned    # + PyTorch for the learned edge detector (needed by the default ink style)
+uv sync                                    # core install
+uv sync --extra learned --extra segment    # + PyTorch and the scene/clutter models (needed by klein and ink)
 ```
 
 On Linux, PyPI's PyTorch wheel bundles CUDA (several GB). For a CPU-only install, add this to
@@ -23,8 +23,10 @@ explicit = true
 ```
 
 ```
-uv run sketch.py examples/albert_hall.jpg                       # ink: faithful trace of learned edges (default)
-uv run sketch.py examples/albert_hall.jpg --stage 3             # ink + hatched tone
+uv run sketch.py examples/albert_hall.jpg                       # klein: AI-drawn urban sketch (default)
+uv run sketch.py examples/albert_hall.jpg --count 1 --mp 1      # one quick draft (~15 s)
+uv run sketch.py examples/albert_hall.jpg --style ink           # ink: faithful trace of learned edges
+uv run sketch.py examples/albert_hall.jpg --style ink --stage 3 # ink + hatched tone
 uv run sketch.py examples/market_hall.jpg --style plain         # classic edges, geometry only
 uv run sketch.py examples/market_hall.jpg --style architect     # + selection, weights, hand
 uv run sketch.py examples/market_hall.jpg --style loose --stage 3   # urban-sketch look with tone
@@ -32,7 +34,36 @@ uv run sketch.py examples/market_hall.jpg --stage 1             # raw foundation
 uv run sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
 ```
 
-## Ink mode (current best)
+## Klein mode (current best, default)
+
+`--style klein` (`sketchart/klein.py`) hands the drawing itself to FLUX.2 [klein] 4B (Apache-2.0),
+an image-editing model run locally in ComfyUI. The tracer can only follow edges; klein has learned
+how illustrators draw, so it simplifies, puts detail where it matters, and draws each material with
+its own marks.
+1. The photo is decluttered (see below) and becomes klein's reference image.
+2. klein redraws it from the `urban_rich` prompt: a pen-and-ink urban sketch with medium detail,
+   keeping each material's texture (awning stripes, tiles, stonework, grass) and the exact
+   composition. Other pen prompts: `--prompt urban | plotter | engraving`, or your own text.
+   Painted styles for prints (kept in colour, no plotter SVG): `--prompt watercolour_ink |
+   pen_and_wash | pencil`.
+3. The drawing is forced to pure black ink on white paper, because klein sometimes lets colour or
+   grey wash through.
+4. It is traced into plotter strokes (`sketchart/vectorise.py`): centrelines, with the pen chosen by
+   line width, and solid areas hatched. Line weights are not yet calibrated against real pens.
+
+Results vary by seed, so it makes `--count` drawings (default 3), one per seed from `--seed`:
+`out/<photo>_s1.png` (the drawing), `_s1.svg` (plotter strokes) and `_s1_preview.png`. At the
+default 4 megapixels (about 2400 x 1600) each takes ~50 s on an RTX 3080. 4 MP is about the limit
+for this model; upscale afterwards for bigger prints.
+
+Setup: ComfyUI must be running (default `http://127.0.0.1:8188`, or set `COMFY_URL`), with
+`diffusion_models/flux-2-klein-4b.safetensors`, `text_encoders/qwen_3_4b.safetensors` and
+`vae/flux2-vae.safetensors` (from Hugging Face `Comfy-Org/vae-text-encorder-for-flux-klein-4b`) in its
+models folder. From WSL, requests go through Windows' `curl.exe`.
+`experiments/comfy_ink.py` and `experiments/compare_sheet.py` hold the model and prompt comparisons
+(2026-10-08) that led here.
+
+## Ink mode
 
 `--style ink` (`sketchart/ink.py`) runs TEED, a small learned edge detector trained on
 human-annotated edges in urban photos (`sketchart/teed.py`, MIT, weights fetched on first use).
@@ -49,6 +80,35 @@ one. On Windows, PyPI's PyTorch is CPU-only, so point uv at a CUDA build (the sa
 `url = "https://download.pytorch.org/whl/cu128"` and `marker = "sys_platform == 'win32'"`).
 Check with `uv run python -c "from sketchart import teed; print(teed.DEVICE)"`.
 For print-quality output use the full photo: `--max-side 0`. The classic pipeline below is still available via `--style`.
+
+### Scene layers and clutter removal (klein and ink modes)
+
+```
+uv sync --extra learned --extra segment
+uv run sketch.py examples/albert_hall.jpg --style ink --scene --declutter inpaint
+uv run sketch.py examples/albert_hall.jpg --style ink --declutter drop --clutter "crane,person"
+uv run sketch.py examples/cotswold_street.webp --style ink --scene --debug    # + _scene.jpg overlay
+uv run sketch.py examples/albert_hall.jpg --clutter "crane,person,car"        # klein: what to remove
+```
+
+klein mode always declutters with `inpaint` unless you pass `--declutter off`. `--scene` applies to
+ink mode only.
+
+`sketchart/scene.py` uses models from the Hugging Face hub (~3GB, downloaded on first use). Adds about
+10–15 s per photo on an RTX 3080.
+- `--scene`: Mask2Former (Swin-L, ADE20K) labels each pixel sky / building / vegetation / hills /
+  ground / other, and `REGION_STYLE` in `ink.py` sets thresholds, shortest mark, smoothing and
+  heaviest pen per layer. Buildings are traced as before. Foliage and hills keep only their bolder
+  lines, and never go to the heavy pen. The ground is drawn lightly, and open sky stays paper.
+- `--declutter inpaint|drop`: Grounding DINO finds `--clutter` prompts (default: cranes, people,
+  vehicles, street lamps, signs, tables, chairs and so on), and SAM 2.1 masks them. `inpaint` fills
+  them with LaMa before tracing, so the building behind is drawn. `drop` leaves them as paper.
+  Detections of "street lamp" or "sign" that the segmentation calls building are kept, because
+  cast-iron columns get mistaken for lamps.
+- Known gaps: black bollards aren't detected. A thin lamp post right against a facade can be kept
+  as building. Check model licences before selling prints: Grounding DINO and SAM 2.1 are
+  Apache-2.0 and LaMa's code is Apache-2.0, but the Mask2Former checkpoint is listed as "other" and
+  the `fashn-ai/LaMa` repackaging has no licence tag.
 
 ## Review harness
 

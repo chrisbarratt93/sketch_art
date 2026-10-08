@@ -149,18 +149,20 @@ def teed_probability(bgr, f, scale):
 
 
 def teed_centrelines(prob, lo, hi):
-    """1px centrelines of the confident part of a TEED map."""
+    """1px centrelines of the confident part of a TEED map. `lo`/`hi` may be
+    per-pixel arrays (np.inf draws nothing there)."""
     strong = apply_hysteresis_threshold(prob, lo, hi)
     # TEED's lines are already narrow, so the skeleton of the confident band is
     # its centreline. (Non-max suppression with 45-degree steps leaves it dotted.)
     return skeletonize(strong)
 
 
-def teed_edges(bgr, f, p):
+def teed_edges(bgr, f, p, lo=None, hi=None):
     """Learned edges as 1px centrelines on the `f` x grid. Returns
-    (mask, probability)."""
+    (mask, probability). `lo`/`hi` override p's thresholds and may be per-pixel
+    arrays on the `f` x grid (np.inf draws nothing there)."""
     prob = teed_probability(bgr, f, p.teed_scale)
-    return teed_centrelines(prob, p.teed_lo, p.teed_hi), prob
+    return teed_centrelines(prob, p.teed_lo if lo is None else lo, p.teed_hi if hi is None else hi), prob
 
 
 def thin(mask, min_size):
