@@ -58,7 +58,7 @@ def path_length(pts):
 
 
 def simplify(pts, eps):
-    if len(pts) < 3:
+    if len(pts) < 3 or eps <= 0:
         return pts
     return cv2.approxPolyDP(pts.reshape(-1, 1, 2), eps, False).reshape(-1, 2)
 
