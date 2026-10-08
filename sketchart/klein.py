@@ -70,6 +70,17 @@ PROMPTS = {
         "edges, colour that strays a little past the lines, gentle granulation and blooms. Natural, "
         "slightly muted colours true to the photo. Leave white paper in the sky and highlights, and "
         "let the washes fade out to bare white watercolour paper towards the edges of the picture."),
+    "watercolour_ink_detailed": (
+        "Turn this photo into a detailed pen and ink drawing with watercolour, as a skilled "
+        "architectural illustrator would make it. Keep the exact composition, framing and perspective "
+        "of the photo, and draw only what is in it: add nothing, remove nothing, simplify nothing. "
+        "First a careful, detailed black fineliner drawing faithful to the photo: every window and "
+        "glazing bar, the rows of roof tiles, the courses of stonework, chimneys, gutters, lamps and "
+        "railings, the individual shrubs, flowers and leaf clusters, the texture of the grass. Then "
+        "transparent watercolour washes over it, kept light and controlled so every ink line stays "
+        "clearly visible: soft wet-in-wet edges, gentle granulation, a little colour straying past the "
+        "lines. Natural colours true to the photo. Leave white paper in the sky and highlights, and "
+        "let the washes fade out to bare white watercolour paper towards the edges of the picture."),
     "pen_and_wash": (
         "Redraw this photo as a traditional pen and wash drawing: confident dark sepia ink lines from "
         "a dip pen, with transparent sepia and warm grey ink washes brushed in loose layers for shadow "
@@ -86,7 +97,7 @@ PROMPTS = {
         "sketch fading out towards the edges of the picture. Graphite only, no colour."),
 }
 # Styles that are paintings, not pen drawings: kept in colour/tone and not traced for the plotter.
-PAINTED = {"watercolour_ink", "pen_and_wash", "pencil"}
+PAINTED = {"watercolour_ink", "watercolour_ink_detailed", "pen_and_wash", "pencil"}
 
 
 @dataclass
