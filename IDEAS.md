@@ -31,3 +31,23 @@ cluster, so foliage turns to noise.
   Don't trace every clump.
 - Hills: a silhouette line plus sparse tree-mass indications, getting lighter with distance
   (atmospheric perspective).
+
+## Canva-ready layered export (for the sale product)
+Canva is the editing tool for customising prints (adding text, recolouring, moving elements).
+Per Canva's upload-format help page:
+- **PSD imports with layers kept** (up to 300MB and 300 image layers). This is the best fit for
+  layered editing.
+- **PDF imports flatten** each page to an image.
+- **AI imports** only work when saved PDF-compatible, and some layers may flatten.
+- **SVG** isn't listed for design import, but works as an uploaded graphic. Canva recommends
+  expanding strokes to filled outlines and avoiding gradients.
+
+Plan:
+- Export a **layered PSD**: one transparent layer per pen layer (heavy / medium / fine /
+  hatching), and later per scene layer once segmentation exists (buildings / vegetation / sky /
+  foreground). Render at print resolution, e.g. 300 dpi at the chosen print size. Write it with a
+  Python PSD writer (e.g. `pytoshop`; check it imports cleanly into Canva).
+- Also export **one SVG per layer with strokes expanded to outlines**, so a single element can be
+  dropped in and recoloured.
+- Keep the plotter SVG as its own export; Canva and the plotter want different things.
+- Test with a real Canva import before relying on it: layer names, transparency, file size.
