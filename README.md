@@ -115,6 +115,11 @@ For print-quality output use the full photo: `--max-side 0`. The classic pipelin
      boustrophedon order within each patch would fix.
 4. **Plot**: page sizing in mm, pen-width-aware hatch spacing, layer per pen, vpype/AxiDraw export.
 
+## Ideas
+
+See [IDEAS.md](IDEAS.md) for planned work: layer separation, clutter removal, foliage and
+landscape handling.
+
 ## Reference / assessment
 
 Style targets: confident single strokes, simplified shapes, detail concentrated at the focal
