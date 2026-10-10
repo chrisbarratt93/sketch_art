@@ -47,7 +47,7 @@ def main():
                          "(both need `uv sync --extra learned --extra segment`)")
     ap.add_argument("--max-side", type=int, default=None,
                     help="downscale so the longest side is at most this (0 = full photo resolution; "
-                         "default 1536 for klein's reference photo, 1400 otherwise)")
+                         "default: 4096 (full size for most photos) for nanobanana, 1536 for klein's reference photo, 1400 otherwise)")
     ap.add_argument("--model", choices=("klein", "nanobanana"), default="klein",
                     help="klein style: who draws it. klein (default): FLUX.2 klein, local and free. nanobanana: "
                          "Nano Banana Pro, paid Comfy credits (~$0.13 per 2K image), follows styles much better; "
@@ -78,7 +78,9 @@ def main():
     ap.add_argument("--debug", action="store_true", help="also write intermediate masks")
     args = ap.parse_args()
     if args.max_side is None:
-        args.max_side = 1536 if args.style == "klein" else 1400
+        # Nano Banana Pro gets the full photo (more real detail to draw from, no extra cost), capped at
+        # 4096 px so the declutter models fit in 10 GB of VRAM (a 4032 px photo peaks at ~8 GB).
+        args.max_side = (4096 if args.model == "nanobanana" else 1536) if args.style == "klein" else 1400
     if args.count is None:
         args.count = 1 if args.model == "nanobanana" else 3
     if args.declutter is None:

@@ -45,7 +45,7 @@ uv run sketch.py photo.jpg --model nanobanana --prompt architect                
 uv run sketch.py photo.jpg --model nanobanana --prompt watercolour_ink --resolution 4K  # watercolour for print
 ```
 
-The photo is decluttered first, as for klein. Each result is reviewed by Gemini 3 Pro against the photo for
+The photo is decluttered first, as for klein, and sent at full size (long side capped at 4096 px). Each result is reviewed by Gemini 3 Pro against the photo for
 invented text, objects, missing scenery or blots, and regenerated up to `--attempts` times (default 3; each
 retry is a paid image; `--attempts 1` to never retry, `--no-review` to skip the check). `--count` defaults
 to 1. Needs a Comfy API key from platform.comfy.org in `~/.config/sketch_art/comfy_api_key`. Code:
