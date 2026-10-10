@@ -58,6 +58,9 @@ def main():
     ap.add_argument("--prompt", default="urban_rich",
                     help="klein: pen styles urban_rich (default), architect, urban, plotter, engraving; painted styles "
                          "(colour PNG only, no plotter SVG) watercolour_ink, pen_and_wash, pencil; or your own text")
+    ap.add_argument("--notes", default="",
+                    help="klein style: scene-specific instructions added to the prompt, e.g. details that must "
+                         "be drawn (\"the two statues on the roof parapet\")")
     ap.add_argument("--mp", type=float, default=4.0,
                     help="klein: drawing size in megapixels (4 = about 2400 x 1600, ~50 s each)")
     ap.add_argument("--resolution", choices=("1K", "2K", "4K"), default="2K",
@@ -181,10 +184,11 @@ def klein_style(args, prefix, clutter):
     # The (cleaned) photo is klein's reference image; ComfyUI needs it as a file.
     ref = Path(f"{prefix}_clean.png")
     cv2.imwrite(str(ref), photo)
-    params = klein.KleinParams(prompt=args.prompt, megapixels=args.mp)
+    prompt = klein.PROMPTS.get(args.prompt, args.prompt) + (" " + args.notes.strip() if args.notes else "")
+    params = klein.KleinParams(prompt=prompt, megapixels=args.mp)
     if args.model == "nanobanana":
         from sketchart import nanobanana
-        nb = nanobanana.NanoBananaParams(prompt=args.prompt, resolution=args.resolution,
+        nb = nanobanana.NanoBananaParams(prompt=prompt, resolution=args.resolution,
                                          attempts=args.attempts, review=not args.no_review)
     try:
         for seed in range(args.seed, args.seed + args.count):
