@@ -42,6 +42,9 @@ ADE_LAYERS = {
 LOOKALIKES = {"street lamp", "sign"}
 # "road sign" and "traffic sign" are not LOOKALIKES, so a sign on a pole is removed even when the
 # segmentation paints it as part of the building behind (the mill pond's no-cycling sign).
+# Features of the place that the detector mistakes for clutter (a statue comes back as "person").
+# They are detected too, and clutter boxes that mostly overlap one are kept in the photo.
+KEEP = ["statue", "sculpture"]
 CLUTTER = ["crane", "person", "dog", "car", "van", "bicycle", "street lamp", "sign", "road sign",
            "traffic sign", "umbrella", "table", "chair", "scaffolding", "traffic cone", "bin"]
 
@@ -96,14 +99,17 @@ def _detect(proc, model, img, prompts, box_thr, text_thr):
 
 
 @torch.inference_mode()
-def clutter_mask(bgr, prompts=CLUTTER, layers=None, box_thr=0.25, text_thr=0.25, batch=4, max_building=0.6):
+def clutter_mask(bgr, prompts=CLUTTER, layers=None, box_thr=0.25, text_thr=0.25, batch=4, max_building=0.6,
+                 keep_features=True):
     """Pixels covered by anything matching `prompts`. Returns (mask, labels).
 
     With `layers` (from `segment`), LOOKALIKES the segmentation mostly calls
     building are kept: at low confidence Grounding DINO takes cast-iron columns
     for street lamps, while real street furniture has its own ADE20K classes.
     (People and cars are left out of the check: under awnings and in doorways
-    the segmentation often paints them as building.)"""
+    the segmentation often paints them as building.)
+    With `keep_features`, clutter that sits on a detected KEEP feature (a statue
+    taken for a person) is left in."""
     from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor, Sam2Model, Sam2Processor
     img = _rgb(bgr)
     h, w = bgr.shape[:2]
@@ -116,11 +122,20 @@ def clutter_mask(bgr, prompts=CLUTTER, layers=None, box_thr=0.25, text_thr=0.25,
         b, l = _detect(proc, dino, img, prompts[i:i + batch], box_thr, text_thr)
         boxes.append(b)
         labels += l
+    keep_boxes = _detect(proc, dino, img, KEEP, box_thr, text_thr)[0] if keep_features else np.zeros((0, 4))
     _release(dino)
     boxes = np.concatenate(boxes).reshape(-1, 4)
     # A box over half the photo is the model labelling the whole scene, not an object.
     keep = ((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) < 0.5 * w * h) & \
         np.isin(labels, prompts)
+    # Clutter that is really a statue: most of its box lies inside a statue box.
+    for i, b in enumerate(boxes):
+        area = max((b[2] - b[0]) * (b[3] - b[1]), 1)
+        for k in keep_boxes:
+            iw = min(b[2], k[2]) - max(b[0], k[0])
+            ih = min(b[3], k[3]) - max(b[1], k[1])
+            if iw > 0 and ih > 0 and iw * ih > 0.6 * area:
+                keep[i] = False
     boxes, labels = boxes[keep], [l for l, k in zip(labels, keep) if k]
     if not len(boxes):
         return np.zeros((h, w), bool), []

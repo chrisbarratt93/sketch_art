@@ -63,6 +63,9 @@ def main():
                          "be drawn (\"the two statues on the roof parapet\")")
     ap.add_argument("--mp", type=float, default=4.0,
                     help="klein: drawing size in megapixels (4 = about 2400 x 1600, ~50 s each)")
+    ap.add_argument("--ref", nargs="*", default=[],
+                    help="nanobanana: extra reference images (e.g. close-up crops of small details), sent after the "
+                         "photo as images 2, 3, ...; describe them with --notes")
     ap.add_argument("--resolution", choices=("1K", "2K", "4K"), default="2K",
                     help="nanobanana: output size (4K for large prints, ~$0.24 each)")
     ap.add_argument("--attempts", type=int, default=3,
@@ -190,6 +193,19 @@ def klein_style(args, prefix, clutter):
         from sketchart import nanobanana
         nb = nanobanana.NanoBananaParams(prompt=prompt, resolution=args.resolution,
                                          attempts=args.attempts, review=not args.no_review)
+        refs = [ref]
+        for i, extra in enumerate(args.ref, 2):
+            # ComfyUI batches images by stretching them to the first one's size, so centre each extra
+            # reference on a white canvas with the photo's proportions first.
+            im = cv2.imread(extra)
+            ph, pw = photo.shape[:2]
+            s = min(pw / im.shape[1], ph / im.shape[0])
+            im = cv2.resize(im, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
+            canvas = np.full_like(photo, 255)
+            y, x = (ph - im.shape[0]) // 2, (pw - im.shape[1]) // 2
+            canvas[y:y + im.shape[0], x:x + im.shape[1]] = im
+            refs.append(Path(f"{prefix}_ref{i}.png"))
+            cv2.imwrite(str(refs[-1]), canvas)
     try:
         for seed in range(args.seed, args.seed + args.count):
             name = f"{prefix}_s{seed}"
@@ -197,7 +213,7 @@ def klein_style(args, prefix, clutter):
             info = {}
             if args.model == "nanobanana":
                 # Seeds step by --attempts so retries never reuse another drawing's seed.
-                r = nanobanana.draw(ref, args.seed + (seed - args.seed) * args.attempts, raw, nb)
+                r = nanobanana.draw(ref, args.seed + (seed - args.seed) * args.attempts, raw, nb, images=refs)
                 Path(f"{name}_review.json").write_text(json.dumps(r, indent=1))
                 info = {"kept": r["kept"], "faults": len(next(a for a in r["attempts"] if a["file"] == r["kept"])["problems"])}
             else:

@@ -65,7 +65,7 @@ def main():
         crop = photo[y0:y1, x0:x1]
         # Silhouette from the photo crop, at 3x so SAM sees enough pixels.
         big = cv2.resize(crop, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        mask, labels = scene.clutter_mask(big, [args.prompt])
+        mask, labels = scene.clutter_mask(big, [args.prompt], keep_features=False)
         if not mask.any():
             print(f"{sketch_path}: no '{args.prompt}' found in the crop, skipped")
             continue
