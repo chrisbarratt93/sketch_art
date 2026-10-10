@@ -7,6 +7,8 @@ per seed, because results vary.
 
     uv run sketch.py examples/albert_hall.jpg            # -> out/albert_hall_s1.png/.svg, _s2, _s3
     uv run sketch.py examples/albert_hall.jpg --count 1 --mp 1 --prompt plotter
+    uv run sketch.py examples/albert_hall.jpg --model nanobanana --prompt architect        # paid
+    uv run sketch.py examples/cotswold_street.webp --model nanobanana --prompt watercolour_ink --resolution 4K
 
 The classic tracer pipelines are still available:
 Stage 1: extract contours and thin lines and trace them into strokes.
@@ -46,13 +48,24 @@ def main():
     ap.add_argument("--max-side", type=int, default=None,
                     help="downscale so the longest side is at most this (0 = full photo resolution; "
                          "default 1536 for klein's reference photo, 1400 otherwise)")
-    ap.add_argument("--count", type=int, default=3,
-                    help="klein: drawings to make, one per seed from --seed (results vary; pick the best)")
+    ap.add_argument("--model", choices=("klein", "nanobanana"), default="klein",
+                    help="klein style: who draws it. klein (default): FLUX.2 klein, local and free. nanobanana: "
+                         "Nano Banana Pro, paid Comfy credits (~$0.13 per 2K image), follows styles much better; "
+                         "needs ~/.config/sketch_art/comfy_api_key")
+    ap.add_argument("--count", type=int, default=None,
+                    help="klein style: drawings to make, one per seed from --seed (default 3 with klein, 1 with "
+                         "nanobanana)")
     ap.add_argument("--prompt", default="urban_rich",
                     help="klein: pen styles urban_rich (default), architect, urban, plotter, engraving; painted styles "
                          "(colour PNG only, no plotter SVG) watercolour_ink, pen_and_wash, pencil; or your own text")
     ap.add_argument("--mp", type=float, default=4.0,
                     help="klein: drawing size in megapixels (4 = about 2400 x 1600, ~50 s each)")
+    ap.add_argument("--resolution", choices=("1K", "2K", "4K"), default="2K",
+                    help="nanobanana: output size (4K for large prints, ~$0.24 each)")
+    ap.add_argument("--attempts", type=int, default=3,
+                    help="nanobanana: most images per drawing while the fault review still finds problems "
+                         "(1 = never retry; each retry is a paid image)")
+    ap.add_argument("--no-review", action="store_true", help="nanobanana: skip the Gemini fault review")
     ap.add_argument("--scene", action="store_true",
                     help="ink: draw each scene layer (building, foliage, ground, sky) in its own way; "
                          "needs `uv sync --extra learned --extra segment`")
@@ -66,6 +79,8 @@ def main():
     args = ap.parse_args()
     if args.max_side is None:
         args.max_side = 1536 if args.style == "klein" else 1400
+    if args.count is None:
+        args.count = 1 if args.model == "nanobanana" else 3
     if args.declutter is None:
         args.declutter = "inpaint" if args.style == "klein" else "off"
     if args.style == "klein" and args.declutter == "drop":
@@ -165,15 +180,26 @@ def klein_style(args, prefix, clutter):
     ref = Path(f"{prefix}_clean.png")
     cv2.imwrite(str(ref), photo)
     params = klein.KleinParams(prompt=args.prompt, megapixels=args.mp)
+    if args.model == "nanobanana":
+        from sketchart import nanobanana
+        nb = nanobanana.NanoBananaParams(prompt=args.prompt, resolution=args.resolution,
+                                         attempts=args.attempts, review=not args.no_review)
     try:
         for seed in range(args.seed, args.seed + args.count):
             name = f"{prefix}_s{seed}"
             raw = Path(f"{name}_raw.png")
-            klein.draw(ref, seed, raw, params)
+            info = {}
+            if args.model == "nanobanana":
+                # Seeds step by --attempts so retries never reuse another drawing's seed.
+                r = nanobanana.draw(ref, args.seed + (seed - args.seed) * args.attempts, raw, nb)
+                Path(f"{name}_review.json").write_text(json.dumps(r, indent=1))
+                info = {"kept": r["kept"], "faults": len(next(a for a in r["attempts"] if a["file"] == r["kept"])["problems"])}
+            else:
+                klein.draw(ref, seed, raw, params)
             if args.prompt in klein.PAINTED:
                 # A painting for print: keep its colour and tone, no plotter strokes.
                 raw.replace(f"{name}.png")
-                print(json.dumps({"painting": f"{name}.png"}), flush=True)
+                print(json.dumps({"painting": f"{name}.png", **info}), flush=True)
                 continue
             bw = klein.black_and_white(cv2.imread(str(raw)))
             cv2.imwrite(f"{name}.png", bw)
@@ -182,7 +208,7 @@ def klein_style(args, prefix, clutter):
             size, layers, _ = vectorise(bw)
             write_svg(f"{name}.svg", size, layers)
             cv2.imwrite(f"{name}_preview.png", render(size, layers))
-            print(json.dumps({"drawing": f"{name}.png", "size": list(size),
+            print(json.dumps({"drawing": f"{name}.png", "size": list(size), **info,
                               **travel_stats([p for _, _, p in layers]),
                               **({"removed": sorted(set(removed))} if removed else {})}), flush=True)
     finally:

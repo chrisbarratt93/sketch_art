@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sketchart import klein  # noqa: E402
+from sketchart import klein, nanobanana  # noqa: E402
 import cloud_compare  # noqa: E402
 
 OUT = Path("out/workflows")
@@ -51,7 +51,7 @@ def main():
         "photo": {"class_type": "LoadImage", "inputs": {"image": photo}},
         "art": {"class_type": "LoadImage", "inputs": {"image": klein._upload("out/mill2/mill_pond_watercolour_4K.jpg")}},
         "batch": {"class_type": "ImageBatch", "inputs": {"image1": ["photo", 0], "image2": ["art", 0]}},
-        "ask": {"class_type": "GeminiNode", "inputs": {"prompt": cloud_compare.REVIEW, "model": "gemini-3-pro-preview",
+        "ask": {"class_type": "GeminiNode", "inputs": {"prompt": nanobanana.REVIEW, "model": nanobanana.REVIEWER,
                                                        "seed": 1, "images": ["batch", 0]}},
         "show": {"class_type": "PreviewAny", "inputs": {"source": ["ask", 0]}},
     }

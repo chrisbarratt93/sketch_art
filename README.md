@@ -34,6 +34,23 @@ uv run sketch.py examples/market_hall.jpg --stage 1             # raw foundation
 uv run sketch.py examples/market_hall.jpg --seed 7 --style loose    # same drawing, different "hand"
 ```
 
+## Nano Banana Pro (paid, best quality)
+
+`--model nanobanana` sends the same prompts to Nano Banana Pro (Gemini 3 Pro Image) through ComfyUI's paid
+partner node, billed to your Comfy credits (~$0.13 per 2K image, ~$0.24 at 4K). It follows style
+instructions far better than klein. The two chosen styles:
+
+```
+uv run sketch.py photo.jpg --model nanobanana --prompt architect                        # pen sketch + plotter SVG
+uv run sketch.py photo.jpg --model nanobanana --prompt watercolour_ink --resolution 4K  # watercolour for print
+```
+
+The photo is decluttered first, as for klein. Each result is reviewed by Gemini 3 Pro against the photo for
+invented text, objects, missing scenery or blots, and regenerated up to `--attempts` times (default 3; each
+retry is a paid image; `--attempts 1` to never retry, `--no-review` to skip the check). `--count` defaults
+to 1. Needs a Comfy API key from platform.comfy.org in `~/.config/sketch_art/comfy_api_key`. Code:
+`sketchart/nanobanana.py`.
+
 ## Klein mode (current best, default)
 
 `--style klein` (`sketchart/klein.py`) hands the drawing itself to FLUX.2 [klein] 4B (Apache-2.0),
